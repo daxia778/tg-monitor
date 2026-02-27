@@ -118,6 +118,26 @@ WHEN new.text IS NOT old.text BEGIN
     VALUES (new.rowid, new.text, new.sender_name);
 END"""
 
+# ─── P1#8: 增量迁移系统 ─────────────────────────────────────────────────
+# 每个元素为 (version: int, description: str, sql: str)
+# version 必须单调递增、不得修改已经发布的 version。
+MIGRATIONS: list[tuple[int, str, str]] = [
+    (
+        1,
+        "Add alerted_messages table for alert deduplication",
+        """CREATE TABLE IF NOT EXISTS alerted_messages (
+            msg_key    TEXT PRIMARY KEY,
+            alerted_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )""",
+    ),
+    # 未来新增字段示例（注释掉）：
+    # (
+    #     2,
+    #     "Add sentiment column to messages",
+    #     "ALTER TABLE messages ADD COLUMN sentiment TEXT",
+    # ),
+]
+
 
 class Database:
     """异步 SQLite 数据库管理器"""
@@ -197,18 +217,58 @@ class Database:
                 logger.info("✅ FTS 索引重建完成")
         except Exception as e:
             logger.warning(f"⚠️ FTS5 初始化失败（回退到 LIKE 搜索）: {e}")
-        # 补丁迁移：确保 alerted_messages 表存在（旧数据库兼容）
-        try:
-            await self._db.execute(
-                """CREATE TABLE IF NOT EXISTS alerted_messages (
-                    msg_key    TEXT PRIMARY KEY,
-                    alerted_at TEXT NOT NULL DEFAULT (datetime('now'))
-                )"""
-            )
-        except (aiosqlite.OperationalError, aiosqlite.IntegrityError):
-            pass
-        await self._db.commit()
+        # 初始化并运行增量迁移（P1#8）
+        await self._run_migrations()
         logger.info("✅ 数据库已连接 (WAL 模式)")
+
+    async def _run_migrations(self):
+        """运行增量迁移（P1#8）。
+        - 创建 schema_version 元数据表（若不存在）
+        - 按 version 顺序应用尚未执行过的迁移
+        - 每次迁移执行后立即内嵌 commit，确保原子性
+        """
+        # 确保元数据表存在
+        await self._db.execute(
+            """CREATE TABLE IF NOT EXISTS schema_version (
+                version    INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL DEFAULT (datetime('now')),
+                description TEXT
+            )"""
+        )
+        await self._db.commit()
+
+        # 读取已应用的最高版本
+        cursor = await self._db.execute(
+            "SELECT COALESCE(MAX(version), 0) as ver FROM schema_version"
+        )
+        current = (await cursor.fetchone())["ver"]
+
+        pending = [(v, d, s) for v, d, s in MIGRATIONS if v > current]
+        if not pending:
+            return
+
+        logger.info(f"🔄 应用 {len(pending)} 个迁移（当前版本: {current}）...")
+        for version, description, sql in sorted(pending, key=lambda x: x[0]):
+            try:
+                await self._db.execute(sql)
+                await self._db.execute(
+                    "INSERT OR IGNORE INTO schema_version (version, description) VALUES (?, ?)",
+                    (version, description),
+                )
+                await self._db.commit()
+                logger.info(f"   ✅ v{version}: {description}")
+            except (aiosqlite.OperationalError, aiosqlite.IntegrityError) as e:
+                # 如果表/列已存在，视为已应用成功
+                if "already exists" in str(e).lower() or "duplicate" in str(e).lower():
+                    await self._db.execute(
+                        "INSERT OR IGNORE INTO schema_version (version, description) VALUES (?, ?)",
+                        (version, description),
+                    )
+                    await self._db.commit()
+                    logger.info(f"   ⚠️ v{version}: 已存在，跳过")
+                else:
+                    logger.error(f"   ❌ v{version} 迁移失败: {e}")
+                    raise
 
     async def close(self):
         if self._db:
