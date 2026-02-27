@@ -141,6 +141,8 @@ class MonitorBot:
 
         if context.args:
             keyword = " ".join(context.args)
+            # P1#5：存储关键词供翻页回调使用
+            context.user_data["last_search_keyword"] = keyword
             await self._do_search(update.message, keyword)
         else:
             await update.message.reply_text(
@@ -212,6 +214,15 @@ class MonitorBot:
         elif data == "back_main":
             await self._show_main_menu_edit(query.message)
 
+        # P1#5：搜索翻页
+        elif data.startswith("search_page_"):
+            page = int(data.rsplit("_", 1)[-1])
+            keyword = context.user_data.get("last_search_keyword", "")
+            if keyword:
+                await self._do_search(query.message, keyword, page=page, edit=True)
+            else:
+                await query.edit_message_text("⚠️ 搜索关键词已过期，请重新搜索。")
+
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理文本消息（搜索）"""
         if not self._is_owner(update.effective_user.id):
@@ -219,7 +230,10 @@ class MonitorBot:
 
         if context.user_data.get("waiting_search"):
             context.user_data["waiting_search"] = False
-            await self._do_search(update.message, update.message.text)
+            keyword = update.message.text
+            # P1#5：存储关键词供翻页回调使用
+            context.user_data["last_search_keyword"] = keyword
+            await self._do_search(update.message, keyword)
 
     # ═══════════════════════════════════════════
     # UI 辅助方法
@@ -532,39 +546,62 @@ class MonitorBot:
                 text=f"❌ 链接查询出错: {e}",
             )
 
-    async def _do_search(self, message, keyword: str):
-        """搜索消息"""
+    async def _do_search(self, message, keyword: str, page: int = 0, edit: bool = False):
+        """搜索消息（支持翻页，P1#5 修复）"""
         await self._ensure_db()
         chat_id = message.chat_id
         bot = message.get_bot()
 
         await bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
 
-        results = await self.db.search_messages(keyword, limit=20)
+        PAGE_SIZE = 10
+        # 多拉一批，支持最多 6 页（60 条）
+        all_results = await self.db.search_messages(keyword, limit=PAGE_SIZE * 6)
 
-        if not results:
-            await bot.send_message(
-                chat_id=chat_id,
-                text=f'🔍 未找到包含 "{keyword}" 的消息。',
-            )
+        if not all_results:
+            msg = f'🔍 未找到包含 "{keyword}" 的消息。'
+            if edit:
+                await message.edit_text(msg)
+            else:
+                await bot.send_message(chat_id=chat_id, text=msg)
             return
 
-        text = f'🔍 *搜索: "{keyword}"*\n'
-        text += f"共找到 {len(results)} 条结果\n\n"
+        total = len(all_results)
+        total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
+        page = min(page, total_pages - 1)  # 防止越界
+        page_results = all_results[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]
 
-        for msg in results[:15]:
+        text = f'🔍 *搜索: "{keyword}"*\n'
+        text += f'第 {page + 1}/{total_pages} 页，共 {total} 条结果\n\n'
+
+        for msg in page_results:
             date = self._fmt_time(msg.get("date", ""))
             group = msg.get("group_title") or f"群组{msg['group_id']}"
             sender = msg.get("sender_name") or "?"
             msg_text = (msg.get("text") or "")[:100]
-
             text += f"`{date}` [{group}]\n"
             text += f"👤 {sender}: {msg_text}\n\n"
 
-        if len(results) > 15:
-            text += f"_...还有 {len(results) - 15} 条结果_\n"
+        # 构建翻页按钮
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(InlineKeyboardButton("◀️ 上一页", callback_data=f"search_page_{page - 1}"))
+        if page < total_pages - 1:
+            nav_buttons.append(InlineKeyboardButton("下一页 ▶️", callback_data=f"search_page_{page + 1}"))
+        keyboard = [nav_buttons] if nav_buttons else []
+        keyboard.append([InlineKeyboardButton("◀️ 返回", callback_data="back_main")])
+        markup = InlineKeyboardMarkup(keyboard)
 
-        await self._send_long_message(bot, chat_id, text, ParseMode.MARKDOWN)
+        # 存储关键词供翻页回调使用
+        # 注意：edit 模式用于翻页（edit_message），首次搜索用 send_message
+        send_kwargs = dict(text=text, parse_mode=ParseMode.MARKDOWN, reply_markup=markup)
+        if edit:
+            try:
+                await message.edit_text(**send_kwargs)
+                return
+            except Exception:
+                pass  # 若 edit 失败则 fall through 到 send
+        await bot.send_message(chat_id=chat_id, **send_kwargs)
 
     async def _do_report(self, message):
         """每日报告"""
