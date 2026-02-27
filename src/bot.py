@@ -274,6 +274,36 @@ class MonitorBot:
     # 核心功能
     # ═══════════════════════════════════════════
 
+    def _make_progress_cb(self, progress_msg, msg_count: int):
+        """工厂方法：生成限速进度回调，消除 _do_summary / _do_report 中的重复代码。
+        最多每 1.5s 刷新一次消息，最后一步（current==total）强制刷新。
+        """
+        _last_edit_time = [0.0]
+        _EDIT_INTERVAL = 1.5
+        model_name = self.config.get("ai", {}).get("model", "?")
+
+        async def _cb(text: str, current: int, total: int):
+            import time
+            now_t = time.monotonic()
+            if current < total and now_t - _last_edit_time[0] < _EDIT_INTERVAL:
+                return
+            _last_edit_time[0] = now_t
+            try:
+                filled = int((current / total) * 10)
+                bar = "■" * filled + "□" * (10 - filled)
+                status_text = (
+                    f"🧠 *AI 摘要任务进行中*\n\n"
+                    f"📊 消息数量: {msg_count} 条\n"
+                    f"🤖 模型: `{model_name}`\n\n"
+                    f"进度: |{bar}| {current * 10}%\n"
+                    f"状态: {text}"
+                )
+                await progress_msg.edit_text(status_text, parse_mode=ParseMode.MARKDOWN)
+            except Exception:
+                pass
+
+        return _cb
+
     def _fmt_time(self, iso_str: str) -> str:
         """格式化 ISO 时间为北京时间 (UTC+8) 可读格式"""
         if not iso_str:
@@ -328,30 +358,8 @@ class MonitorBot:
             parse_mode=ParseMode.MARKDOWN,
         )
 
-        # 限速进度回调：最多每 1.5s 才真正 edit 一次，避免 TG 频率限制
-        _last_edit_time = [0.0]
-        _EDIT_INTERVAL = 1.5
-
-        async def progress_cb(text, current, total):
-            import time
-            now_t = time.monotonic()
-            # 总是更新最后一步（current==total），否则限速
-            if current < total and now_t - _last_edit_time[0] < _EDIT_INTERVAL:
-                return
-            _last_edit_time[0] = now_t
-            try:
-                filled = int((current / total) * 10)
-                bar = "■" * filled + "□" * (10 - filled)
-                status_text = (
-                    f"🧠 *AI 摘要任务进行中*\n\n"
-                    f"📊 消息数量: {msg_count} 条\n"
-                    f"🤖 模型: `{self.config.get('ai', {}).get('model', '?')}`\n\n"
-                    f"进度: |{bar}| {current*10}%\n"
-                    f"状态: {text}"
-                )
-                await progress_msg.edit_text(status_text, parse_mode=ParseMode.MARKDOWN)
-            except Exception:
-                pass
+        # 使用工厂方法生成限速进度回调（P0#3 修复：消除重复代码）
+        progress_cb = self._make_progress_cb(progress_msg, msg_count)
 
         # 保持 typing 动作（防止 TG 认为 bot 已停止响应）
         async def keep_typing():
@@ -570,27 +578,11 @@ class MonitorBot:
             parse_mode=ParseMode.MARKDOWN,
         )
 
-        # 限速进度回调（复用 _do_summary 的限速策略，防止 FloodWait）
-        _last_edit_time = [0.0]
-        _EDIT_INTERVAL = 1.5
-
-        async def progress_cb(text, current, total):
-            import time
-            now_t = time.monotonic()
-            if current < total and now_t - _last_edit_time[0] < _EDIT_INTERVAL:
-                return
-            _last_edit_time[0] = now_t
-            try:
-                filled = int((current / total) * 10)
-                bar = "■" * filled + "□" * (10 - filled)
-                status_text = (
-                    f"📊 *正在生成每日报告...*\n\n"
-                    f"📈 进度: |{bar}| {current*10}%\n"
-                    f"📝 状态: {text}"
-                )
-                await progress_msg.edit_text(status_text, parse_mode=ParseMode.MARKDOWN)
-            except Exception:
-                pass
+        # 使用工厂方法生成限速进度回调（P0#3 修复：消除重复代码）
+        msg_count_24h = await self.db.get_message_count(
+            since=(datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        )
+        progress_cb = self._make_progress_cb(progress_msg, msg_count_24h)
 
         # 保持 typing 动作（防止 TG 认为 bot 已停止响应）
         async def keep_typing():
@@ -783,6 +775,14 @@ class MonitorBot:
             logger.info(f"🤖 机器人已启动: @{me.username}")
 
         app.post_init = post_init
+
+        # P1#4 修复：Bot 退出时优雅关闭数据库连接，防止资源泄漏
+        async def post_shutdown(application):
+            if self.db:
+                await self.db.close()
+                logger.info("🔌 数据库连接已关闭")
+
+        app.post_shutdown = post_shutdown
 
         # ─── 定时推送摘要 ───
         push_cfg = self.config.get("scheduled_push", {})
