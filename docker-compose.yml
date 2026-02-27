@@ -1,0 +1,50 @@
+version: "3.9"
+
+# ─── 共享网络 ───────────────────────────────────────────────────
+networks:
+  tg-net:
+    driver: bridge
+
+# ─── 持久化卷（SQLite 数据库）──────────────────────────────────
+volumes:
+  tg-data:
+
+# ─── 基础服务配置（锚点）─────────────────────────────────────
+x-base: &base
+  build: .
+  restart: unless-stopped
+  env_file: .env
+  volumes:
+    - tg-data:/app/data
+    - ./config.yaml:/app/config.yaml:ro
+    # Telethon session 文件需要持久化
+    - ./tg_monitor.session:/app/tg_monitor.session
+  networks:
+    - tg-net
+
+# ─── 服务定义 ────────────────────────────────────────────────
+services:
+
+  # 消息采集器（Telethon 实时监听）
+  collector:
+    <<: *base
+    container_name: tg-monitor-collector
+    command: ["start", "collector"]
+
+  # Telegram Bot 交互界面
+  bot:
+    <<: *base
+    container_name: tg-monitor-bot
+    command: ["start", "bot"]
+    depends_on:
+      - collector
+
+  # Web Dashboard（FastAPI）
+  dashboard:
+    <<: *base
+    container_name: tg-monitor-dashboard
+    command: ["start", "dashboard", "--port", "${DASHBOARD_PORT:-8050}"]
+    ports:
+      - "${DASHBOARD_PORT:-8050}:${DASHBOARD_PORT:-8050}"
+    depends_on:
+      - collector

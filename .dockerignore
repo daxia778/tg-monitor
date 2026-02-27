@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+dist/
+*.egg-info/
+.eggs/
+
+# Credentials & Data
+.env
+data/
+*.session
+*.session-journal
+
+# Runtime
+.pids/
+*.pid
+
+# Dev/IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Git
+.git/
+.github/
+
+# Docs
+README.md
+CONTRIBUTING.md
+LICENSE
+*.md
