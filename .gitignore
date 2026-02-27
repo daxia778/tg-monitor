@@ -1,0 +1,27 @@
+# Credentials & Secrets
+.env
+*.session
+*.session-journal
+
+# Data
+data/
+
+# Runtime
+.pids/
+*.pid
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+dist/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store

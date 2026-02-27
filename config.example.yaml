@@ -1,0 +1,53 @@
+telegram:
+  api_id:       # 从 .env TG_API_ID 读取
+  api_hash:     # 从 .env TG_API_HASH 读取
+  session_name: "tg_monitor"
+  phone:        # 从 .env TG_PHONE 读取
+
+# 要监控的群组/频道列表（填写群组 ID 或用户名）
+groups:
+  - name: "示例群组"
+    id: 0000000000  # 替换为你的群组 ID
+  # - name: "示例频道"
+  #   username: "example_channel"  # 或填写用户名
+
+ai:
+  api_url:      # 从 .env AI_API_URL 读取 (e.g. http://localhost:18789/v1/chat/completions)
+  api_key:      # 从 .env AI_API_KEY 读取（单 key 备用）
+  api_keys: [] # 由 .env AI_API_KEY_1~N 自动填入（多 key 轮询）
+  model: "gpt-4o"
+  max_tokens: 4096
+  # 每个 key 的并发请求上限
+  max_concurrent_per_key: 3
+  max_concurrent: 9
+  # AI 请求超时（秒）
+  timeout: 120
+  # 摘要系统 prompt（可自定义）
+  summary_system_prompt: |
+    你是一个 Telegram 群聊分析助手，请用中文输出结构化摘要。
+    使用纯文本格式，列表项用「•」，章节标题用【】包裹。
+
+database:
+  path: "./data/tg_monitor.db"
+
+monitoring:
+  mode: "realtime"         # realtime 或 scheduled
+  schedule: "*/30 * * * *" # 仅定时模式使用
+  keep_days: 90            # 消息保留天数
+
+# 关键词告警
+alerts:
+  enabled: false
+  keywords: []
+  # keywords: ["airdrop", "whitelist"]
+
+# 定时摘要推送
+scheduled_push:
+  enabled: false
+  cron: "0 9,21 * * *"   # 每天 09:00 和 21:00 推送
+  hours: 12               # 每次覆盖最近 N 小时
+
+# TG 机器人配置
+bot:
+  token:      # 从 .env BOT_TOKEN 读取
+  # owner_id 从 .env BOT_OWNER_ID 读取（安全起见不写在此处）

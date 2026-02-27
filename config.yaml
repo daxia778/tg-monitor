@@ -1,0 +1,118 @@
+telegram:
+  api_id:                                     # 从 .env TG_API_ID 读取
+  api_hash:                                   # 从 .env TG_API_HASH 读取
+  session_name: "tg_monitor"
+  phone:                                      # 从 .env TG_PHONE 读取
+
+# 要监控的群组/频道列表（共 16 个）
+groups:
+  # ─── 群组 ───
+  - name: "gemini交流群"
+    id: 3478506546
+  - name: "NikoCard交流群"
+    id: 3299483468
+  - name: "Holy Card wow"
+    id: 3623618117
+  - name: "nodecard交流群"
+    id: 3875662633
+  - name: "LCardPay-交流群"
+    id: 3541574939
+  - name: "Gemini-Ai-Gmail交流群"
+    id: 3662198890
+  - name: "SHEER ID交流群"
+    id: 3514727965
+  - name: "gemini交流群2"
+    id: 3645837253
+  - name: "gemini pro成品批发零售（25h卡网）"
+    id: 3807602917
+  - name: "antigravity问题交流群"
+    id: 3760021550
+  - name: "gemini pro批发 问题交流售后"
+    id: 3748653661
+  - name: "SHEER ID交流群2"
+    id: 5143664607
+  # ─── 频道 ───
+  - name: "Gemini补货通知"
+    id: 3414358666
+  - name: "node数字游民搞机"
+    id: 3701465011
+  - name: "Antigravity Manager"
+    id: 3861392570
+  - name: "NikoCard羊毛频道"
+    id: 3628037890
+
+ai:
+  api_url:                          # 从 .env AI_API_URL 读取
+  api_key:                          # 从 .env AI_API_KEY 读取（单 key 备用）
+  # ↓ 多 Key 轮询：.env 里的 AI_API_KEY_1~2 自动加载
+  #   TG Monitor 轮询 2 个 CPA key -> CPA 内部对 5 个 Codex 账号 round-robin
+  api_keys: []                      # 由 .env AI_API_KEY_1~2 自动填入
+  model: "gpt-5.3-codex"
+  max_tokens: 4096
+  # 2 个 CPA key × 5 并发 = 10 同时请求（每个 Codex 账号分到 ~2 请求）
+  max_concurrent_per_key: 5
+  max_concurrent: 10
+  # 摘要系统 prompt（纯文本，禁止 Markdown 符号）
+  summary_system_prompt: |
+    你是一个 Telegram 群聊信息助手，帮助忙碌的用户快速了解群聊动态并知道下一步该做什么。
+
+    严格格式规则（逐条强制执行，违反即重试）：
+    - 全程禁止出现 # 符号（包括 # ## ###）
+    - 全程禁止出现星号 * 符号（包括 ** 加粗、* 斜体、* 列表项）
+    - 全程禁止出现下划线 _ 符号
+    - 列表项必须用「•」开头，不能用 * 或 -
+    - 章节标题用【】包裹，例如【热门话题】
+    - 章节之间用一行「────────」分隔
+    - 内容精炼，每节不超过 5 条，突出最有价值信息
+
+    输出结构（只输出有内容的节，空节省略）：
+
+    【今日速览】
+    用 2-3 句话概括当前最重要的动态和整体氛围。
+
+    ────────
+    【各群动态】
+    • 群名称：核心发生了什么（一句话），活跃程度
+    （每个群单独一行，只列出有实质内容的群）
+
+    ────────
+    【需要关注的信息】
+    • 具体说明哪个群、什么时间段、哪类内容值得去翻看
+    • 例如：「NikoCard 群 22:00 后有人反映出入金问题，建议查看」
+    • 例如：「gemini 补货通知频道有新消息，可能有货源变动」
+
+    ────────
+    【风险与注意事项】
+    • 列出任何警告、投诉、跑路迹象、价格变动、故障等异常信息
+    （如无异常则省略此节）
+
+    ────────
+    【行动建议】
+    • 根据以上分析，列出 2-4 条今天你需要采取的具体行动
+    • 格式：「去 [群名] 看 [具体内容]」或「关注 [事项] 的最新进展」
+
+database:
+  path: "./data/tg_monitor.db"
+
+monitoring:
+  mode: "realtime"         # realtime 或 scheduled
+  schedule: "*/30 * * * *" # 定时模式才使用
+  batch_size: 500          # 每批处理的消息数
+  keep_days: 90            # 数据库保留天数（超期消息每日自动清理）
+
+# 关键词告警（已关闭）
+alerts:
+  enabled: false
+  keywords: []
+
+# 定时摘要推送
+scheduled_push:
+  enabled: true             # 定时摘要推送（每天 9:00 和 21:00）
+  cron: "0 9,21 * * *"     # 每天 9:00 和 21:00 推送
+  hours: 12                 # 每次摘要覆盖最近 N 小时
+
+# TG 机器人配置（通过 @BotFather 创建）
+bot:
+  token:                                      # 从 .env BOT_TOKEN 读取
+  # owner_id 已移入 .env BOT_OWNER_ID（P0 修复：敏感 ID 不写在 yaml）
+  # owner_id:                                 # 从 .env BOT_OWNER_ID 读取
