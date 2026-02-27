@@ -137,9 +137,9 @@ class Collector:
             logger.warning(f"⚠️ 无法获取最后消息时间: {e}")
 
     async def _recover_gap(self):
-        """重连后回填离线期间的消息缺口"""
+        """重连后回填离线期间的消息缺口（P1#7 修复：改为并发回填）"""
         if not self._last_msg_time:
-            logger.info("ℹ️ 无历史消息时间参考，跳过缺口恢复")
+            logger.info("ℹ️ 无历史消息时间参考，跳过缺口恢徤")
             return
 
         gap_start = self._last_msg_time
@@ -147,33 +147,30 @@ class Collector:
         gap_seconds = (now - gap_start).total_seconds()
 
         if gap_seconds < 30:
-            # 缺口太短（< 30s），不需要填补
             return
 
         gap_hours = gap_seconds / 3600
         logger.info(
             f"🔄 检测到消息缺口: "
             f"{gap_start.strftime('%H:%M:%S')} → "
-            f"{now.strftime('%H:%M:%S')} ({gap_hours:.1f}h)，正在回填..."
+            f"{now.strftime('%H:%M:%S')} ({gap_hours:.1f}h)，并发回填 {len(self._monitored_ids)} 个群组..."
         )
 
-        total_recovered = 0
-        for gid in self._monitored_ids:
+        async def _recover_one(gid: int) -> int:
+            """recover a single group, return number of messages recovered"""
             try:
                 entity = await self.client.get_entity(gid)
                 title = getattr(entity, "title", str(gid))
-                # C1 修复：先收集再批量 insert，避免逐条 commit 拖慢回填
                 batch: list = []
                 async for message in self.client.iter_messages(
                     entity,
                     offset_date=now,
                     reverse=False,
-                    limit=None,  # 不限制数量
+                    limit=None,
                 ):
                     msg_time = message.date.replace(tzinfo=timezone.utc)
                     if msg_time <= gap_start:
-                        break  # 已达到缺口起点，停止
-
+                        break
                     msg_dict = await self._message_to_dict(message)
                     if msg_dict:
                         msg_dict["group_id"] = gid
@@ -182,12 +179,16 @@ class Collector:
                 if batch:
                     await self.db.insert_messages_batch(batch)
                     logger.info(f"   ✅ [{title}] 回填 {len(batch)} 条")
-                total_recovered += len(batch)
-
+                return len(batch)
             except Exception as e:
                 logger.error(
                     f"   ❌ [{self._group_names.get(gid, gid)}] 回填失败: {e}"
                 )
+                return 0
+
+        # 并发回填所有群组，级别从 O(N) 串行降为 O(1) 并发
+        results = await asyncio.gather(*[_recover_one(gid) for gid in self._monitored_ids])
+        total_recovered = sum(results)
 
         if total_recovered > 0:
             logger.info(f"🔄 缺口回填完成: 共 {total_recovered} 条消息")
