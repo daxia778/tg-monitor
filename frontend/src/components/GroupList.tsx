@@ -1,3 +1,5 @@
+import { motion, AnimatePresence } from 'framer-motion';
+import { Users, MessageSquare, TrendingUp } from 'lucide-react';
 
 // 与后端 /api/groups 响应字段保持一致
 export type GroupStat = {
@@ -13,51 +15,86 @@ export function GroupList({ groups, isLoading }: { groups: GroupStat[]; isLoadin
     const maxCount = groups.length > 0 ? Math.max(...groups.map(g => g.message_count)) : 1;
 
     return (
-        <div className="bg-bg-card rounded-[14px] border border-border-subtle overflow-hidden">
-            <div className="py-4 px-5 border-b border-border-subtle flex justify-between items-center bg-white/[0.03]">
-                <h3 className="text-sm font-semibold flex items-center gap-1.5">
-                    <span>🔥</span> 活跃群组
-                </h3>
-                <span className="text-[11px] text-text3 bg-bg-primary px-2 py-0.5 rounded-full border border-border-subtle">
-                    Top 10
+        <div className="glass-panel rounded-[20px] overflow-hidden flex flex-col h-[600px] relative z-10">
+            <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-black/40 backdrop-blur-md relative z-20">
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-accent2/10 flex items-center justify-center border border-accent2/20 shrink-0">
+                        <TrendingUp className="w-4 h-4 text-accent2" />
+                    </div>
+                    <h3 className="text-[15px] font-semibold tracking-wide text-white">群组热度榜</h3>
+                </div>
+                <span className="text-[10px] text-accent2 bg-accent2/10 px-2.5 py-1 rounded-md border border-accent2/20 tracking-wider">
+                    TOP {Math.min(groups.length, 10)}
                 </span>
             </div>
-            <div className="p-4 px-5">
+
+            <div className="flex-1 overflow-y-auto px-5 py-4 custom-scrollbar bg-black/20">
                 {isLoading ? (
-                    <><Skeleton /><Skeleton /><Skeleton /></>
+                    <div className="space-y-4">
+                        {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} />)}
+                    </div>
                 ) : groups.length === 0 ? (
-                    <div className="text-center text-text3 py-4 text-[13px]">暂无数据</div>
+                    <div className="flex items-center justify-center h-full text-text3 text-sm">暂无数据</div>
                 ) : (
-                    groups.map(g => (
-                        <div
-                            key={g.group_id}
-                            className="flex justify-between items-center py-2.5 border-b border-border-subtle last:border-0 transition-colors hover:bg-glass hover:-mx-2 hover:px-2 rounded cursor-pointer"
-                        >
-                            <div className="flex-1 min-w-0 pr-4">
-                                <div className="text-[13px] font-medium truncate text-text-main">{g.title}</div>
-                                <div className="text-[10px] text-text3 mt-0.5">
-                                    {g.message_count.toLocaleString()} 消息 · {g.active_users} 活跃用户
-                                </div>
-                                <div className="h-[2px] bg-accent/10 rounded-sm mt-1.5 overflow-hidden">
-                                    <div
-                                        className="h-full bg-accent rounded-sm transition-all duration-700"
-                                        style={{ width: `${Math.min(100, (g.message_count / maxCount) * 100)}%` }}
-                                    />
-                                </div>
-                            </div>
-                            <div className="text-sm font-bold text-accent whitespace-nowrap">
-                                {g.message_count.toLocaleString()}
-                            </div>
-                        </div>
-                    ))
+                    <div className="space-y-3">
+                        <AnimatePresence initial={false}>
+                            {groups.map((g, i) => (
+                                <motion.div
+                                    key={g.group_id}
+                                    initial={{ opacity: 0, x: 20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: i * 0.05, type: 'spring', stiffness: 300, damping: 25 }}
+                                    className="group relative bg-white/5 border border-white/10 p-3 rounded-xl hover:bg-white/10 transition-colors cursor-pointer overflow-hidden"
+                                >
+                                    <div className="flex justify-between items-start mb-2 relative z-10">
+                                        <div className="text-[13px] font-bold text-white truncate max-w-[70%] group-hover:text-accent2 transition-colors">
+                                            {g.title}
+                                        </div>
+                                        <div className="flex items-center gap-1 bg-white/10 px-2 py-0.5 rounded-full border border-white/5">
+                                            <MessageSquare className="w-3 h-3 text-accent2" />
+                                            <span className="text-xs font-mono font-semibold text-white">{g.message_count.toLocaleString()}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-4 text-[11px] text-text3 mb-3 relative z-10">
+                                        <div className="flex items-center gap-1.5 bg-black/30 px-2 py-1 rounded-lg border border-white/5">
+                                            <Users className="w-3 h-3 opacity-70" />
+                                            <span>{g.active_users} 活跃</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="h-1.5 bg-black/40 rounded-full overflow-hidden border border-white/5 relative z-10">
+                                        <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${Math.min(100, (g.message_count / maxCount) * 100)}%` }}
+                                            transition={{ duration: 1, ease: "easeOut", delay: i * 0.1 }}
+                                            className="h-full bg-gradient-to-r from-accent2/50 to-accent4 rounded-full relative"
+                                        >
+                                            <div className="absolute top-0 right-0 bottom-0 w-4 bg-white/40 blur-sm mix-blend-overlay" />
+                                        </motion.div>
+                                    </div>
+
+                                    {/* Subtitle Glow */}
+                                    <div className="absolute -bottom-4 -right-4 w-16 h-16 bg-accent2/20 blur-xl group-hover:bg-accent4/20 transition-colors rounded-full" />
+                                </motion.div>
+                            ))}
+                        </AnimatePresence>
+                    </div>
                 )}
             </div>
+
+            <style>{`
+                .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+                .custom-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); }
+            `}</style>
         </div>
     );
 }
 
 function Skeleton() {
     return (
-        <div className="h-14 rounded-xl bg-gradient-to-r from-white/[0.03] via-white/[0.07] to-white/[0.03] animate-pulse my-2 border border-border-subtle" />
+        <div className="h-20 rounded-xl bg-white/5 animate-pulse border border-white/10" />
     );
 }

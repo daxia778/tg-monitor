@@ -23,6 +23,18 @@
 }
 
 @layer base {
+
+  html,
+  body {
+    overflow: hidden;
+    height: 100%;
+  }
+
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
   body {
     @apply bg-bg-primary text-text-main;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -35,7 +47,40 @@
     background-size: 32px 32px;
     background-position: center center;
     background-attachment: fixed;
-    min-height: 100vh;
+    min-height: 100%;
+  }
+
+  /* Global slim scrollbar — hidden until hover on the parent */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+
+  *:hover {
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 4px;
+    transition: background 0.2s;
+  }
+
+  *:hover::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
   }
 }
 

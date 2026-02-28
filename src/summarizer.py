@@ -26,6 +26,10 @@ class Summarizer:
     def __init__(self, config: dict, db: Database):
         self.config = config
         self.db = db
+        
+        from .rag import RAGEngine
+        self.rag = RAGEngine()
+        
         self.ai_cfg = config.get("ai", {})
         self.api_url = self.ai_cfg.get("api_url", "http://localhost:18789/v1/chat/completions")
         self.model = self.ai_cfg.get("model", "gpt-4o")
@@ -423,6 +427,12 @@ class Summarizer:
             messages = await self.db.get_messages(
                 group_id=gid, since=since, until=until
             )
+
+            # 自动注入到 RAG 向量数据库
+            try:
+                self.rag.add_messages(messages)
+            except Exception as e:
+                logger.error(f"⚠️ RAG 向量化失败 [{title}]: {e}")
 
             logger.info(f"📝 生成 [{title}] 摘要 ({len(messages)} 条消息)...")
 

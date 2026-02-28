@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { StatCards } from './components/StatCards';
+import { CyberCharts } from './components/CyberCharts';
 import { MessageList } from './components/MessageList';
 import type { Message } from './components/MessageList';
 import { GroupList } from './components/GroupList';
@@ -9,7 +11,9 @@ import type { GroupStat } from './components/GroupList';
 import { SearchPage } from './components/SearchPage';
 import { SummariesPage } from './components/SummariesPage';
 import { LinksPage } from './components/LinksPage';
+import { Chatbot } from './components/Chatbot';
 import { SettingsPage } from './components/SettingsPage';
+import { TenantsPage } from './components/TenantsPage';
 
 type OverviewData = {
   total_messages: number;
@@ -219,6 +223,7 @@ export default function App() {
               groupCount={overview?.group_count ?? '...'}
               aiModel={overview?.model ?? '...'}
             />
+            <CyberCharts />
             <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-5">
               <MessageList messages={recentMsgs} isLoading={isLoading} />
               <GroupList groups={groups} isLoading={isLoading} />
@@ -233,10 +238,14 @@ export default function App() {
         );
       case 'search':
         return <SearchPage />;
+      case 'chat':
+        return <Chatbot />;
       case 'summaries':
         return <SummariesPage />;
       case 'links':
         return <LinksPage />;
+      case 'accounts':
+        return <TenantsPage />;
       case 'settings':
         return <SettingsPage />;
       default:
@@ -245,10 +254,10 @@ export default function App() {
   };
 
   return (
-    <div className="flex w-full min-h-screen">
+    <div className="flex w-full h-screen overflow-hidden">
       <Sidebar activeItem={page} onNavigate={setPage} />
 
-      <main className="flex-1 ml-[220px] min-h-screen flex flex-col">
+      <main className="flex-1 ml-[220px] h-screen flex flex-col overflow-hidden">
         <Topbar
           page={page}
           onExportCsv={handleExportCsv}
@@ -257,8 +266,19 @@ export default function App() {
           lastRefresh={lastRefresh}
         />
 
-        <div className="p-6 md:p-8 flex-1">
-          {renderContent()}
+        <div className="flex-1 relative overflow-hidden">
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.div
+              key={page}
+              initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+              className="absolute inset-0 p-6 md:p-8 overflow-y-auto"
+            >
+              {renderContent()}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </main>
 

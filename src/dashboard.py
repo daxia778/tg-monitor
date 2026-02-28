@@ -4,19 +4,22 @@ Web Dashboard V2 — FastAPI 后端
 """
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import logging
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 
-from fastapi import FastAPI, Query, Depends
+from fastapi import FastAPI, Query, Depends, HTTPException, Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
+from pydantic import BaseModel
 
 from .config import load_config
 from .database import Database
+from .rag import RAGEngine
 
 logger = logging.getLogger("tg-monitor.web")
 
@@ -25,16 +28,34 @@ app = FastAPI(title="TG Monitor Dashboard", version="2.0.0")
 # 全局状态
 _db: Optional[Database] = None
 _config: Optional[dict] = None
+_rag: Optional[RAGEngine] = None
+
+# 多租户登录流程的临时 Telethon 客户端缓存 {phone -> client}
+_pending_logins: Dict[str, Any] = {}
+
+
+# ─── Pydantic 模型 ───
+class AddTenantRequest(BaseModel):
+    phone: str
+    api_id: int = 0
+    api_hash: str = ""
+
+
+class ConfirmLoginRequest(BaseModel):
+    phone: str
+    code: str
+    phone_code_hash: str
 
 STATIC_DIR = Path(__file__).parent / "web" / "static"
 
 
 async def get_db() -> Database:
-    global _db, _config
+    global _db, _config, _rag
     if _db is None:
         _config = load_config()
         _db = Database(_config["database"]["path"])
         await _db.connect()
+        _rag = RAGEngine()
     return _db
 
 
@@ -284,6 +305,91 @@ async def api_export(
 
 
 # ═══════════════════════════════════════════
+# RAG Chat API
+# ═══════════════════════════════════════════
+
+from pydantic import BaseModel
+import httpx
+
+class AskRequest(BaseModel):
+    query: str
+    
+@app.post("/api/chat/ask")
+async def api_chat_ask(req: AskRequest, db: Database = Depends(get_db)):
+    """基于本地量化库的 RAG 智能问答接口"""
+    if not _rag or not _rag._enabled:
+        return {"answer": "由于 ChromaDB 缺少，RAG 向量库未开启。请检查是否安装了 chromadb，并重新启动应用。", "citations": []}
+        
+    query = req.query
+    if not query:
+        return {"answer": "请输入问题", "citations": []}
+        
+    results = _rag.search(query, n_results=15)
+    
+    if not results:
+        return {"answer": "在过去收录的群聊消息中，未能检索到相关的上下文片段。换个提问方式试试？", "citations": []}
+        
+    context_parts = []
+    citations = []
+    for i, res in enumerate(results):
+        meta = res["metadata"]
+        txt = res["content"]
+        # 给模型喂带编号的上下文
+        context_parts.append(f"[{i+1}] {txt}")
+        citations.append({
+            "id": i+1,
+            "group_id": meta.get("group_id"),
+            "sender_name": meta.get("sender_name"),
+            "date": meta.get("date"),
+            "text": txt
+        })
+        
+    context_str = "\n\n".join(context_parts)
+    
+    config = _config or load_config()
+    ai_cfg = config.get("ai", {})
+    api_url = ai_cfg.get("api_url", "http://localhost:18789/v1/chat/completions")
+    api_key = ai_cfg.get("api_key", "")
+    model = ai_cfg.get("model", "gpt-4o")
+    
+    system_prompt = (
+        "你是一个聪明、中立且专业的 TG 聊天记录分析智囊。\n"
+        "我会提供相关的搜索片段给你（如下），请基于片段回答用户的问题。\n"
+        "非常重要：如果片段中没有与问题相关的信息，请直接回答“记录中未搜索到相关信息”，绝对不要编造或基于通用知识硬答。\n"
+        "非常重要：你的回答**必须**使用数字标记进行溯源引用，如：'根据[1]的说明...，并且[3]也提到了...'\n\n"
+        "【搜索片段上下文】\n"
+        f"{context_str}"
+    )
+    
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": query}
+        ],
+        "temperature": 0.2, # 问答通常降低幻觉
+    }
+    
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+        
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(api_url, json=payload, headers=headers)
+            resp.raise_for_status()
+            reply = resp.json()["choices"][0]["message"]["content"]
+            
+            return {
+                "answer": reply,
+                "citations": citations
+            }
+    except Exception as e:
+        logger.error(f"RAG Chat AI 请求失败: {e}")
+        return {"answer": f"由于 AI 接口异常无法生成回答: {str(e)[:100]}", "citations": citations}
+
+
+# ═══════════════════════════════════════════
 # 摘要相关 API
 # ═══════════════════════════════════════════
 
@@ -398,6 +504,156 @@ async def api_summary_history(limit: int = Query(default=10, le=50), db: Databas
     """获取历史摘要"""
     summaries = await db.get_latest_summaries(limit=limit)
     return {"data": summaries}
+
+
+# ═══════════════════════════════════════════
+# Phase 3: 多租户 Auth Portal API
+# ═══════════════════════════════════════════
+
+@app.get("/api/tenants")
+async def api_list_tenants(db: Database = Depends(get_db)):
+    """列出所有租户账号"""
+    tenants = await db.get_tenants(active_only=False)
+    # 脱敏: 隐藏 api_hash
+    for t in tenants:
+        t["api_hash"] = t["api_hash"][:6] + "****" if t.get("api_hash") else ""
+    return {"data": tenants}
+
+
+@app.post("/api/tenants/send_code")
+async def api_send_code(body: AddTenantRequest):
+    """
+    发起登录流程:
+    1. 用配置里的 api_id/api_hash（或 body 里传的）
+    2. 创建临时 Telethon client -> 发送验证码到指定手机号
+    3. 返回 phone_code_hash 供下一步确认
+    """
+    try:
+        from telethon import TelegramClient
+        from telethon.sessions import MemorySession
+
+        # 优先使用 body 传入的 api_id/api_hash，否则从配置读取
+        cfg = _config or load_config()
+        tg_cfg = cfg.get("telegram", {})
+        api_id = body.api_id or int(tg_cfg.get("api_id", 0))
+        api_hash = body.api_hash or tg_cfg.get("api_hash", "")
+
+        if not api_id or not api_hash:
+            raise HTTPException(status_code=400, detail="缺少 api_id / api_hash")
+
+        phone = body.phone.strip()
+        session_name = f"tenant_{phone.replace('+', '').replace(' ', '')}"
+
+        # 如果已有等待中的 client，先断开
+        if phone in _pending_logins:
+            try:
+                await _pending_logins[phone]["client"].disconnect()
+            except Exception:
+                pass
+
+        client = TelegramClient(MemorySession(), api_id, api_hash)
+        await client.connect()
+        result = await client.send_code_request(phone)
+
+        _pending_logins[phone] = {
+            "client": client,
+            "phone_code_hash": result.phone_code_hash,
+            "api_id": api_id,
+            "api_hash": api_hash,
+            "session_name": session_name,
+        }
+
+        logger.info(f"📱 验证码已发送至 {phone}")
+        return {"ok": True, "phone_code_hash": result.phone_code_hash, "session_name": session_name}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"发送验证码失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/tenants/confirm_login")
+async def api_confirm_login(body: ConfirmLoginRequest, db: Database = Depends(get_db)):
+    """
+    验证码确认:
+    1. 登录成功后将 session 字符串持久化到磁盘
+    2. 在 tenants 表保存元数据
+    """
+    phone = body.phone.strip()
+    if phone not in _pending_logins:
+        raise HTTPException(status_code=400, detail="未找到等待中的登录请求，请先调用 send_code")
+
+    pending = _pending_logins[phone]
+    client = pending["client"]
+
+    try:
+        await client.sign_in(
+            phone=phone,
+            code=body.code,
+            phone_code_hash=body.phone_code_hash or pending["phone_code_hash"],
+        )
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"登录失败: {e}")
+
+    me = await client.get_me()
+    session_name = pending["session_name"]
+
+    # 将 session 持久化（存为文件 session）
+    from telethon.sessions import SQLiteSession
+    sessions_dir = Path("data/sessions")
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    session_path = sessions_dir / session_name
+
+    persistent_client = TelegramClient(
+        str(session_path), pending["api_id"], pending["api_hash"]
+    )
+    await persistent_client.connect()
+    # 从 MemorySession 迁移：直接 sign_in 会生成新的 sqlite session
+    try:
+        await persistent_client.sign_in(
+            phone=phone,
+            code=body.code,
+            phone_code_hash=body.phone_code_hash or pending["phone_code_hash"],
+        )
+    except Exception:
+        pass  # 可能已经在 client 上登录过，忽略
+    await persistent_client.disconnect()
+
+    # 保存到数据库
+    tenant_id = await db.add_tenant(
+        api_id=pending["api_id"],
+        api_hash=pending["api_hash"],
+        phone=phone,
+        session_name=str(session_path),
+    )
+
+    # 清理临时 client
+    await client.disconnect()
+    del _pending_logins[phone]
+
+    logger.info(f"✅ 租户 #{tenant_id} 登录成功: {me.first_name} ({phone})")
+    return {
+        "ok": True,
+        "tenant_id": tenant_id,
+        "name": me.first_name,
+        "username": me.username,
+        "phone": phone,
+    }
+
+
+@app.delete("/api/tenants/{tenant_id}")
+async def api_deactivate_tenant(tenant_id: int, db: Database = Depends(get_db)):
+    """停用租户账号"""
+    await db.set_tenant_active(tenant_id, False)
+    return {"ok": True, "message": f"租户 #{tenant_id} 已停用"}
+
+
+@app.post("/api/tenants/{tenant_id}/activate")
+async def api_activate_tenant(tenant_id: int, db: Database = Depends(get_db)):
+    """重新启用租户账号"""
+    await db.set_tenant_active(tenant_id, True)
+    return {"ok": True, "message": f"租户 #{tenant_id} 已启用"}
 
 
 def run_dashboard(config_path=None, host="0.0.0.0", port=8501):

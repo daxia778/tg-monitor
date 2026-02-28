@@ -35,12 +35,12 @@
 ### Phase 3: 🏢 多端订阅与 SaaS 化重构 (UserBot Multi-tenant)
 打破现有的单环境、单账号壁垒，允许多个物理用户独立使用或接入服务。
 
-- [ ] **数据库底层租户隔离 (Tenant Isolation)**
+- [x] **数据库底层租户隔离 (Tenant Isolation)**
   - 修改 `tg_monitor.sqlite` 的 schema 结构设计。
   - 核心表（`messages`, `groups_monitor`, `summary_jobs`）全部强制增加 `tenant_id` 和 `owner_id` 外键，从 DAO 层根绝越权查询问题。
-- [ ] **Web 端扫码登录/凭证注入 (Auth Portal)**
+- [x] **Web 端扫码登录/凭证注入 (Auth Portal)**
   - 开发多用户生命周期管理。不再局限于配置文件中死磕 `api_id` 和 `api_hash`。
   - 利用 Telethon 的 `send_code_request`，在前端新增一套完整的 Web-login 界面，允许最终用户输入手机号和验证码登入自己的 UserBot。
-- [ ] **多任务并行调度池 (Multi-Session Worker Pool)**
+- [x] **多任务并行调度池 (Multi-Session Worker Pool)**
   - 重写 `src/collector.py`。从单点阻塞监听改造为 `asyncio` Task Group Manager。
   - 支持动态拉起、暂停、销毁不同租户对应的 Telethon Client Session，做到互不干扰、内存复用，支撑商业化灰产/量化群体的并发监控需求。

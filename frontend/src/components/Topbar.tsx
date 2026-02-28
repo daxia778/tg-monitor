@@ -1,11 +1,12 @@
+import { Download, Bot, RefreshCw, Cpu } from 'lucide-react';
 
 const PAGE_TITLES: Record<string, string> = {
     dashboard: '实时监控大盘',
     groups: '群组监控',
-    search: '全库搜索',
-    summaries: '所有摘要',
-    links: '链接收集',
-    settings: '偏好设置与系统状态',
+    search: '全库溯源搜索',
+    summaries: '全景洞察摘要',
+    links: '情报链接网路',
+    settings: '偏好设置与状态',
 };
 
 interface TopbarProps {
@@ -23,29 +24,51 @@ export function Topbar({ page, onExportCsv, onSummary, isSummarizing, lastRefres
         : '—';
 
     return (
-        <header className="px-8 py-4 flex justify-between items-center border-b border-border-subtle backdrop-blur-xl bg-bg-primary/70 sticky top-0 z-10">
-            <div>
-                <h2 className="text-lg font-semibold text-text-main">{title}</h2>
-                <p className="text-[11px] text-text3 mt-0.5">上次刷新: {refreshStr} · 每60s自动更新</p>
+        <header className="px-6 md:px-8 py-5 flex flex-col md:flex-row md:justify-between md:items-center border-b border-white/10 backdrop-blur-2xl bg-black/50 sticky top-0 z-[100] gap-4">
+            <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 flex items-center justify-center shadow-lg">
+                    <Cpu className="w-5 h-5 text-accent" />
+                </div>
+                <div>
+                    <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                        {title}
+                    </h2>
+                    <p className="text-[11px] text-text3 font-mono flex items-center gap-1.5 mt-1">
+                        <RefreshCw className="w-3 h-3 opacity-60" />
+                        上次刷新: {refreshStr} <span className="mx-1">·</span> 60s Auto Sync
+                    </p>
+                </div>
             </div>
 
-            <div className="flex gap-2.5">
+            <div className="flex gap-3">
                 <button
                     id="btn-export-csv"
                     onClick={onExportCsv}
-                    className="bg-transparent border border-border-subtle text-text2 px-4 py-2 rounded-lg cursor-pointer text-[13px] font-medium transition-all hover:bg-bg-hover hover:text-text-main hover:border-white/20 active:scale-95 flex items-center gap-1.5"
+                    className="group bg-white/[0.03] border border-white/10 text-text2 px-4 py-2 rounded-xl cursor-pointer text-[13px] font-medium transition-all hover:bg-white/10 hover:text-white hover:border-white/20 active:scale-95 flex items-center gap-2"
                 >
-                    <span>📥</span> 导出 CSV
+                    <Download className="w-4 h-4 text-text3 group-hover:text-accent4 transition-colors" />
+                    导出 CSV
                 </button>
                 <button
                     id="btn-ai-summary"
                     onClick={onSummary}
                     disabled={isSummarizing}
-                    className={`border border-accent text-accent px-4 py-2 rounded-lg cursor-pointer text-[13px] font-medium transition-all active:scale-95 flex items-center gap-1.5 ${isSummarizing ? 'opacity-60 cursor-not-allowed' : 'bg-bg-hover hover:opacity-90'
-                        }`}
+                    className={`relative overflow-hidden group border px-5 py-2 rounded-xl cursor-pointer text-[13px] font-bold transition-all active:scale-95 flex items-center gap-2 ${isSummarizing
+                        ? 'border-accent5/30 text-accent5/50 cursor-not-allowed bg-accent5/5'
+                        : 'border-accent5/50 text-accent5 bg-accent5/10 hover:bg-accent5/20 hover:border-accent5 hover:shadow-[0_0_15px_rgba(139,92,246,0.3)]'}`}
                 >
-                    <span>{isSummarizing ? '⏳' : '🤖'}</span>
-                    {isSummarizing ? 'AI 生成中...' : 'AI 智能摘要'}
+                    {isSummarizing ? (
+                        <>
+                            <div className="absolute inset-0 shimmer-bg opacity-20 pointer-events-none" />
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            分析推演中...
+                        </>
+                    ) : (
+                        <>
+                            <Bot className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                            生成 AI 洞察
+                        </>
+                    )}
                 </button>
             </div>
         </header>

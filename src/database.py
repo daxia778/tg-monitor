@@ -10,6 +10,7 @@ from .db.links import LinksDAO
 from .db.analytics import AnalyticsDAO
 from .db.groups import GroupsDAO
 from .db.alerts import AlertsDAO
+from .db.tenants import TenantsDAO
 
 class Database:
     """异步 SQLite 数据库管理器门面"""
@@ -21,6 +22,7 @@ class Database:
         self.analytics: Optional[AnalyticsDAO] = None
         self.groups: Optional[GroupsDAO] = None
         self.alerts: Optional[AlertsDAO] = None
+        self.tenants: Optional[TenantsDAO] = None
 
     async def connect(self):
         """连接数据库并初始化"""
@@ -32,9 +34,20 @@ class Database:
         self.analytics = AnalyticsDAO(conn)
         self.groups = GroupsDAO(conn)
         self.alerts = AlertsDAO(conn)
+        self.tenants = TenantsDAO(conn)
 
     async def close(self):
         await self._core.close()
+
+    # ─── 租户操作 (TenantsDAO) ───
+    async def add_tenant(self, api_id: int, api_hash: str, phone: str, session_name: str) -> int:
+        return await self.tenants.add_tenant(api_id, api_hash, phone, session_name)
+
+    async def get_tenants(self, active_only: bool = True) -> List[dict]:
+        return await self.tenants.get_tenants(active_only)
+
+    async def set_tenant_active(self, tenant_id: int, is_active: bool):
+        return await self.tenants.set_tenant_active(tenant_id, is_active)
 
     # ─── 群组操作 (GroupsDAO) ───
     async def upsert_group(self, group_id: int, title: str, username: Optional[str] = None, member_count: Optional[int] = None):

@@ -11,8 +11,19 @@ from typing import Optional, List, Tuple
 logger = logging.getLogger("tg-monitor.db.core")
 
 SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS tenants (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    api_id       INTEGER NOT NULL,
+    api_hash     TEXT NOT NULL,
+    phone        TEXT,
+    session_name TEXT NOT NULL UNIQUE,
+    is_active    INTEGER DEFAULT 1,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS groups (
     id           INTEGER PRIMARY KEY,
+    tenant_id    INTEGER NOT NULL DEFAULT 1,
     title        TEXT NOT NULL,
     username     TEXT,
     member_count INTEGER,
@@ -22,6 +33,7 @@ CREATE TABLE IF NOT EXISTS groups (
 CREATE TABLE IF NOT EXISTS messages (
     id           INTEGER NOT NULL,
     group_id     INTEGER NOT NULL,
+    tenant_id    INTEGER NOT NULL DEFAULT 1,
     sender_id    INTEGER,
     sender_name  TEXT,
     text         TEXT,
@@ -36,6 +48,7 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE TABLE IF NOT EXISTS links (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id    INTEGER NOT NULL DEFAULT 1,
     url          TEXT NOT NULL,
     message_id   INTEGER NOT NULL,
     group_id     INTEGER NOT NULL,
@@ -44,11 +57,13 @@ CREATE TABLE IF NOT EXISTS links (
     discovered_at TEXT NOT NULL,
     title        TEXT,
     description  TEXT,
-    image_url    TEXT
+    image_url    TEXT,
+    tags         TEXT
 );
 
 CREATE TABLE IF NOT EXISTS summaries (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id    INTEGER NOT NULL DEFAULT 1,
     group_id     INTEGER,
     period_start TEXT NOT NULL,
     period_end   TEXT NOT NULL,
@@ -60,6 +75,7 @@ CREATE TABLE IF NOT EXISTS summaries (
 
 CREATE TABLE IF NOT EXISTS summary_jobs (
     id           TEXT PRIMARY KEY,
+    tenant_id    INTEGER NOT NULL DEFAULT 1,
     group_id     INTEGER,
     hours        INTEGER,
     mode         TEXT,
@@ -147,6 +163,36 @@ MIGRATIONS: List[Tuple[int, str, str]] = [
         "Add image_url to links",
         "ALTER TABLE links ADD COLUMN image_url TEXT",
     ),
+    (
+        5,
+        "Add tags to links",
+        "ALTER TABLE links ADD COLUMN tags TEXT",
+    ),
+    (
+        6,
+        "Add tenants table and tenant_id to all core tables for multi-tenant support",
+        """
+        BEGIN TRANSACTION;
+        CREATE TABLE IF NOT EXISTS tenants (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            api_id       INTEGER NOT NULL,
+            api_hash     TEXT NOT NULL,
+            phone        TEXT,
+            session_name TEXT NOT NULL UNIQUE,
+            is_active    INTEGER DEFAULT 1,
+            created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        -- Seed default tenant from config if empty, we will handle in Python logic later 
+        INSERT OR IGNORE INTO tenants (id, api_id, api_hash, session_name) VALUES (1, 0, 'placeholder', 'default_tenant');
+
+        ALTER TABLE groups ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE messages ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE links ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE summaries ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE summary_jobs ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1;
+        COMMIT;
+        """
+    )
 ]
 
 class DatabaseConnection:
@@ -227,7 +273,8 @@ class DatabaseConnection:
         logger.info(f"🔄 应用 {len(pending)} 个迁移（当前版本: {current}）...")
         for version, description, sql in sorted(pending, key=lambda x: x[0]):
             try:
-                await self.conn.execute(sql)
+                # Use executescript for multiple statements separated by ';'
+                await self.conn.executescript(sql)
                 await self.conn.execute(
                     "INSERT OR IGNORE INTO schema_version (version, description) VALUES (?, ?)",
                     (version, description),

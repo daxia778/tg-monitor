@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 
 type StatCardsProps = {
     totalMessages: string | number;
@@ -14,7 +15,10 @@ function useCounter(targetValue: string | number, duration: number = 1000) {
 
     useEffect(() => {
         if (typeof targetValue === 'string') {
-            setCount(targetValue);
+            if (count !== targetValue) {
+                 
+                setCount(targetValue);
+            }
             return;
         }
 
@@ -37,6 +41,7 @@ function useCounter(targetValue: string | number, duration: number = 1000) {
         };
 
         window.requestAnimationFrame(step);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [targetValue, duration]);
 
     return count;
@@ -104,9 +109,15 @@ function StatCard({ icon, value, label, color }: { icon: React.ReactNode; value:
             </div>
 
             <div className="flex items-baseline gap-2">
-                <div className="text-3xl font-bold tracking-tight text-white font-mono shadow-white">
+                <motion.div
+                    key={typeof displayValue === 'number' ? displayValue : String(displayValue)}
+                    initial={{ scale: 1.1, color: '#22c55e', textShadow: '0 0 10px rgba(34, 197, 94, 0.5)' }}
+                    animate={{ scale: 1, color: '#ffffff', textShadow: '0 0 0px rgba(255,255,255,0)' }}
+                    transition={{ duration: 0.8, ease: "easeOut" }}
+                    className="text-3xl font-bold tracking-tight text-white font-mono shadow-white"
+                >
                     {typeof value === 'number' || typeof value === 'string' && value !== '...' ? displayValue : '...'}
-                </div>
+                </motion.div>
             </div>
 
             {/* Subtle glow effect underneath */}

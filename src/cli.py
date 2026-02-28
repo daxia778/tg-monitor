@@ -20,6 +20,7 @@ from .config import load_config, validate_config
 from .database import Database
 from .collector import Collector
 from .summarizer import Summarizer
+from .session_pool import SessionPool
 
 
 console = Console()
@@ -106,6 +107,36 @@ def start(ctx, fetch_history):
         run_async(_run())
     except KeyboardInterrupt:
         console.print("\n[yellow]⏹ 已停止监控[/yellow]")
+
+
+# ═══════════════════════════════════════════════════════
+# pool-start — 多租户并发启动所有 Worker
+# ═══════════════════════════════════════════════════════
+
+
+@cli.command("pool-start")
+@click.pass_context
+def pool_start(ctx):
+    """🚀 多租户并发启动：读取 DB 中所有活跃租户并并发监控"""
+    cfg = ctx.obj["config"]
+
+    async def _run():
+        db_path = cfg["database"]["path"]
+        pool = SessionPool(cfg, db_path)
+        try:
+            await pool.start_all()
+            # 将永久运行直到 Ctrl+C
+            while True:
+                await asyncio.sleep(60)
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            console.print("\n[yellow]⏹ 正在关闭所有 Worker...[/yellow]")
+            await pool.stop_all()
+            console.print("[green]✅ 已安全关闭[/green]")
+
+    try:
+        run_async(_run())
+    except KeyboardInterrupt:
+        console.print("\n[yellow]⏹ 已停止多租户监控[/yellow]")
 
 
 # ═══════════════════════════════════════════════════════
