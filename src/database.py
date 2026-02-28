@@ -21,18 +21,7 @@ URL_PATTERN = re.compile(
     r"https?://[^\s<>\"')\]，。！？、；：）》」』】\u200b]+"
 )
 
-# 过滤 TG 内部域名（统一常量，两处过滤共用）
-TG_BLOCK_DOMAINS = ("t.me", "telegram.me", "telegram.org", "telegra.ph", "telegram.dog")
-
-# 预计算 SQL 过滤片段，避免运行时 f-string 拼接 SQL（P0 安全修复）
-# get_links() 用：每个条件以 AND 连接，放在 WHERE 列表里
-_TG_LINK_WHERE_CONDITIONS: tuple = tuple(
-    f"l.url NOT LIKE '%{d}%'" for d in TG_BLOCK_DOMAINS
-)
-# get_links_aggregated() 用：以换行 AND 拼成整段过滤子句
-_TG_LINK_AGGREGATE_FILTER: str = "\n".join(
-    f"  AND LOWER(l.url) NOT LIKE '%{d}%'" for d in TG_BLOCK_DOMAINS
-)
+# 不再使用硬编码域名过滤，改为在方法中动态使用参数化查询
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS groups (
@@ -465,15 +454,21 @@ class Database:
         self,
         group_id: Optional[int] = None,
         limit: int = 20,
+        block_domains: Optional[List[str]] = None,
     ) -> List[dict]:
-        # 使用预计算常量，避免运行时动态拼接 SQL（P0 安全修复）
-        conditions: List[str] = list(_TG_LINK_WHERE_CONDITIONS)
+        conditions: List[str] = []
         params: List[Any] = []
+        
+        if block_domains:
+            for domain in block_domains:
+                conditions.append("LOWER(l.url) NOT LIKE ?")
+                params.append(f"%{domain.lower()}%")
+                
         if group_id is not None:
             conditions.append("l.group_id = ?")
             params.append(group_id)
 
-        where = "WHERE " + " AND ".join(conditions)
+        where = "WHERE " + " AND ".join(conditions) if conditions else ""
         cursor = await self._db.execute(
             f"""SELECT l.*, g.title as group_title
                 FROM links l
@@ -488,10 +483,18 @@ class Database:
     async def get_links_aggregated(
         self,
         limit: int = 50,
+        block_domains: Optional[List[str]] = None,
     ) -> List[dict]:
         """按 URL 聚合链接，统计出现次数、来源群组和发送者"""
-        # 使用预计算常量，避免运行时动态拼接 SQL（P0 安全修复）
-        tg_filters = _TG_LINK_AGGREGATE_FILTER
+        conditions: List[str] = ["1=1"]
+        params: List[Any] = []
+        
+        if block_domains:
+            for domain in block_domains:
+                conditions.append("LOWER(l.url) NOT LIKE ?")
+                params.append(f"%{domain.lower()}%")
+
+        where = " AND ".join(conditions)
         cursor = await self._db.execute(
             f"""SELECT
                   l.url,
@@ -503,12 +506,11 @@ class Database:
                   MAX(l.discovered_at) as last_seen
                FROM links l
                LEFT JOIN groups g ON l.group_id = g.id
-               WHERE 1=1
-               {tg_filters}
+               WHERE {where}
                GROUP BY l.url
                ORDER BY total_count DESC, last_seen DESC
                LIMIT ?""",
-            (limit,),
+            [*params, limit],
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]

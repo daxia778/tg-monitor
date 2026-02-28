@@ -169,12 +169,16 @@ async def api_top_senders(hours: int = Query(default=24), limit: int = Query(def
 async def api_links(limit: int = Query(default=30)):
     """最新链接"""
     db = await get_db()
-    # 多取一些，Python 层二次过滤后再截断到 limit
-    links = await db.get_links(limit=limit * 2)
-    # 二次过滤：确保任何包含 t.me / telegram 的链接都不漏出
-    TG_DOMAINS = ("t.me", "telegram.me", "telegram.org", "telegra.ph")
-    links = [l for l in links if not any(d in (l.get("url") or "").lower() for d in TG_DOMAINS)]
-    return {"data": links[:limit]}
+    config = _config or load_config()
+    
+    # 动态加载过滤域名，默认过滤内部短链接
+    block_domains = config.get("filtering", {}).get(
+        "block_domains", 
+        ["t.me", "telegram.me", "telegram.org", "telegra.ph", "telegram.dog"]
+    )
+    
+    links = await db.get_links(limit=limit, block_domains=block_domains)
+    return {"data": links}
 
 
 @app.get("/api/search")
@@ -234,20 +238,31 @@ async def api_export(
 
     rows = await db.export_messages(since=since, group_id=group_id, limit=max_rows)
 
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["ID", "群组", "发送者", "内容", "时间", "媒体类型", "转发"])
-    for r in rows:
-        writer.writerow([
-            r["id"], r.get("group_title", ""), r.get("sender_name", ""),
-            (r.get("text") or "")[:500], r.get("date", ""),
-            r.get("media_type", ""), r.get("forward_from", ""),
-        ])
-
-    output.seek(0)
     filename = f"tg_monitor_export_{now.strftime('%Y%m%d_%H%M')}.csv"
+    
+    async def generate_csv():
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["ID", "群组", "发送者", "内容", "时间", "媒体类型", "转发"])
+        yield output.getvalue()
+        output.truncate(0)
+        output.seek(0)
+        
+        chunk_size = 500
+        for i in range(0, len(rows), chunk_size):
+            chunk = rows[i:i + chunk_size]
+            for r in chunk:
+                writer.writerow([
+                    r["id"], r.get("group_title", ""), r.get("sender_name", ""),
+                    (r.get("text") or "")[:500], r.get("date", ""),
+                    r.get("media_type", ""), r.get("forward_from", ""),
+                ])
+            yield output.getvalue()
+            output.truncate(0)
+            output.seek(0)
+
     return StreamingResponse(
-        iter([output.getvalue()]),
+        generate_csv(),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
@@ -264,6 +279,27 @@ from .summarizer import Summarizer
 
 # 异步任务追踪
 _summary_tasks: dict = {}  # task_id -> {status, progress, result, error, ...}
+
+
+def _cleanup_summary_tasks():
+    """清理超期（超过1小时的完成任务或超过6小时的运行任务）避免内存泄漏"""
+    now = datetime.now(timezone.utc)
+    to_delete = []
+    for tid, task in _summary_tasks.items():
+        started_str = task.get("started_at", now.isoformat())
+        try:
+            started = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
+            if started.tzinfo is None:
+                started = started.replace(tzinfo=timezone.utc)
+        except Exception:
+            started = now
+            
+        is_finished = task.get("status") in ("done", "error")
+        age_hours = (now - started).total_seconds() / 3600
+        if (is_finished and age_hours > 1) or (not is_finished and age_hours > 6):
+            to_delete.append(tid)
+    for tid in to_delete:
+        del _summary_tasks[tid]
 
 
 @app.get("/api/llm/status")
@@ -308,6 +344,9 @@ async def api_summary_generate(
     """触发摘要生成（异步任务，返回 task_id 用于轮询进度）"""
     config = _config or load_config()
     db = await get_db()
+
+    # 触发前先清理过期任务释放内存
+    _cleanup_summary_tasks()
 
     task_id = str(uuid.uuid4())[:8]
     _summary_tasks[task_id] = {

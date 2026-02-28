@@ -10,22 +10,36 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
         :root {
-            --bg-primary: #0a0a1a;
-            --bg-secondary: #111128;
-            --bg-card: rgba(20, 20, 50, 0.7);
-            --bg-sidebar: #0d0d24;
-            --bg-hover: rgba(79, 195, 247, 0.08);
-            --accent: #4fc3f7;
-            --accent2: #b388ff;
-            --accent3: #f48fb1;
-            --accent4: #69f0ae;
-            --accent5: #ffb74d;
-            --accent6: #ef5350;
-            --text: #e8eaf6;
-            --text2: #9fa8da;
-            --text3: #5c6bc0;
-            --border: rgba(255, 255, 255, 0.06);
-            --glass: rgba(255, 255, 255, 0.03);
+            --bg-primary: #0f1117;
+            /* dark gray */
+            --bg-secondary: #161b22;
+            /* slightly lighter */
+            --bg-card: rgba(22, 27, 34, 0.85);
+            /* deep card */
+            --bg-sidebar: #161b22;
+            /* sidebar same as secondary */
+            --bg-hover: rgba(88, 166, 255, 0.08);
+            /* subtle blue hover */
+            --accent: #58a6ff;
+            /* GitHub blue */
+            --accent2: #79c0ff;
+            /* lighter accent */
+            --accent3: #8b949e;
+            /* neutral */
+            --accent4: #39c5bb;
+            /* teal */
+            --accent5: #d29922;
+            /* amber */
+            --accent6: #e5534b;
+            /* red */
+            --text: #e6edf3;
+            /* off-white */
+            --text2: #8b949e;
+            /* secondary text */
+            --text3: #6e7681;
+            /* tertiary */
+            --border: rgba(255, 255, 255, 0.08);
+            --glass: rgba(255, 255, 255, 0.04);
             --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
             --r: 14px;
             --sidebar-w: 220px;
@@ -46,16 +60,7 @@
             overflow-x: hidden
         }
 
-        body::before {
-            content: '';
-            position: fixed;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle at 20% 30%, rgba(79, 195, 247, 0.04) 0%, transparent 50%), radial-gradient(circle at 80% 70%, rgba(179, 136, 255, 0.04) 0%, transparent 50%);
-            z-index: -1
-        }
+        /* Removed gradient glow effect */
 
         /* ─── 侧边栏 ─── */
         .sidebar {
@@ -82,11 +87,8 @@
 
         .sidebar-brand h1 {
             font-size: 16px;
+            color: var(--accent);
             font-weight: 700;
-            background: linear-gradient(135deg, var(--accent), var(--accent2));
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent
         }
 
         .sidebar-brand span {
@@ -119,9 +121,10 @@
         }
 
         .nav-item.active {
-            background: rgba(79, 195, 247, 0.12);
+            background: var(--bg-hover);
             color: var(--accent);
-            font-weight: 600
+            border-left: 3px solid var(--accent);
+            font-weight: 600;
         }
 
         .nav-item .icon {
@@ -183,50 +186,21 @@
             align-items: center;
             border-bottom: 1px solid var(--border);
             backdrop-filter: blur(20px);
-            background: rgba(10, 10, 26, 0.8);
+            background: var(--bg-primary);
             position: sticky;
             top: 0;
-            z-index: 100
-        }
-
-        .topbar h2 {
-            font-size: 18px;
-            font-weight: 600
-        }
-
-        .topbar-actions {
-            display: flex;
-            gap: 8px
-        }
-
-        .btn {
-            padding: 7px 14px;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-            background: transparent;
-            color: var(--text2);
-            font-size: 12px;
-            font-family: inherit;
-            cursor: pointer;
-            transition: all .2s;
-            display: flex;
-            align-items: center;
-            gap: 4px
-        }
-
-        .btn:hover {
-            background: var(--bg-hover);
-            color: var(--text)
+            z-index: 100;
         }
 
         .btn-accent {
-            border-color: rgba(79, 195, 247, .3);
+            border-color: var(--accent);
             color: var(--accent);
-            background: rgba(79, 195, 247, .08)
+            background: var(--bg-hover);
         }
 
         .btn-accent:hover {
-            background: rgba(79, 195, 247, .15)
+            background: var(--bg-hover);
+            opacity: 0.9;
         }
 
         .content {
@@ -323,23 +297,23 @@
         }
 
         .s-card:nth-child(1)::before {
-            background: linear-gradient(90deg, var(--accent), var(--accent2))
+            background: var(--accent)
         }
 
         .s-card:nth-child(2)::before {
-            background: linear-gradient(90deg, var(--accent4), #00c853)
+            background: var(--accent4)
         }
 
         .s-card:nth-child(3)::before {
-            background: linear-gradient(90deg, var(--accent5), #ff9100)
+            background: var(--accent5)
         }
 
         .s-card:nth-child(4)::before {
-            background: linear-gradient(90deg, var(--accent3), var(--accent2))
+            background: var(--accent3)
         }
 
         .s-card:nth-child(5)::before {
-            background: linear-gradient(90deg, var(--accent2), var(--accent))
+            background: var(--accent2)
         }
 
         .s-card .ic {
@@ -410,7 +384,7 @@
             font-size: 10px;
             color: var(--accent2);
             padding: 1px 6px;
-            background: rgba(179, 136, 255, .1);
+            background: rgba(121, 192, 255, .1);
             border-radius: 4px
         }
 
@@ -486,7 +460,7 @@
 
         .grp-bar {
             height: 3px;
-            background: rgba(79, 195, 247, .1);
+            background: rgba(88, 166, 255, .1);
             border-radius: 2px;
             margin-top: 4px;
             overflow: hidden
@@ -494,7 +468,7 @@
 
         .grp-bar-fill {
             height: 100%;
-            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            background: var(--accent);
             border-radius: 2px;
             transition: width .8s
         }
@@ -564,7 +538,7 @@
         }
 
         .search-btn {
-            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            background: var(--accent);
             border: none;
             color: #fff;
             padding: 10px 18px;
@@ -717,9 +691,9 @@
 
         .t-btn.on,
         .t-btn:hover {
-            background: rgba(79, 195, 247, .12);
+            background: rgba(88, 166, 255, .12);
             color: var(--accent);
-            border-color: rgba(79, 195, 247, .3)
+            border-color: rgba(88, 166, 255, .3)
         }
 
         /* ─── 响应式 ─── */
@@ -741,6 +715,67 @@
             .grid-32 {
                 grid-template-columns: 1fr
             }
+        }
+
+        /* ─── Page Fade ─── */
+        .page.active {
+            animation: fadeIn .22s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(6px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ─── Card Hover Lift ─── */
+        .card {
+            transition: border-color .2s, box-shadow .2s;
+        }
+
+        .card:hover {
+            border-color: rgba(88, 166, 255, 0.2);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .s-card {
+            cursor: pointer;
+            transition: transform .22s, box-shadow .22s, border-color .22s;
+        }
+
+        .s-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+            border-color: rgba(88, 166, 255, 0.25);
+        }
+
+        .s-card:active {
+            transform: translateY(-1px);
+        }
+
+        /* ─── Msg Expand ─── */
+        .msg-item.expandable .msg-txt {
+            max-height: 3.6em;
+            overflow: hidden;
+            transition: max-height .3s ease;
+        }
+
+        .msg-item.expandable.expanded .msg-txt {
+            max-height: 400px;
+        }
+
+        .msg-expand-hint {
+            font-size: 11px;
+            color: var(--accent);
+            margin-top: 3px;
+            cursor: pointer;
+            user-select: none;
         }
     </style>
 </head>
@@ -1144,12 +1179,12 @@
                 const vals = d.data.map(p => p.count);
                 if (trendChart) trendChart.destroy();
                 const ctx = document.getElementById('trendChart').getContext('2d');
-                const g = ctx.createLinearGradient(0, 0, 0, 220); g.addColorStop(0, 'rgba(79,195,247,.25)'); g.addColorStop(1, 'rgba(79,195,247,0)');
+                const g = ctx.createLinearGradient(0, 0, 0, 220); g.addColorStop(0, 'rgba(88,166,255,.25)'); g.addColorStop(1, 'rgba(88,166,255,0)');
                 trendChart = new Chart(ctx, {
-                    type: 'line', data: { labels, datasets: [{ data: vals, borderColor: '#4fc3f7', backgroundColor: g, fill: true, tension: .4, borderWidth: 2, pointRadius: 0, pointHoverRadius: 3 }] },
+                    type: 'line', data: { labels, datasets: [{ data: vals, borderColor: '#58a6ff', backgroundColor: g, fill: true, tension: .4, borderWidth: 2, pointRadius: 0, pointHoverRadius: 3 }] },
                     options: {
-                        responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1a1a2e', borderColor: 'rgba(255,255,255,.1)', borderWidth: 1, padding: 8, cornerRadius: 6 } },
-                        scales: { x: { grid: { color: 'rgba(255,255,255,.02)' }, ticks: { color: '#5c6bc0', font: { size: 9 }, maxRotation: 0, maxTicksLimit: 10 } }, y: { grid: { color: 'rgba(255,255,255,.02)' }, ticks: { color: '#5c6bc0', font: { size: 9 } }, beginAtZero: true } }, interaction: { intersect: false, mode: 'index' }
+                        responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#161b22', borderColor: 'rgba(255,255,255,.1)', borderWidth: 1, padding: 8, cornerRadius: 6 } },
+                        scales: { x: { grid: { color: 'rgba(255,255,255,.02)' }, ticks: { color: '#6e7681', font: { size: 9 }, maxRotation: 0, maxTicksLimit: 10 } }, y: { grid: { color: 'rgba(255,255,255,.02)' }, ticks: { color: '#6e7681', font: { size: 9 } }, beginAtZero: true } }, interaction: { intersect: false, mode: 'index' }
                     }
                 });
             } catch (e) { console.error(e) }
@@ -1169,12 +1204,12 @@
                 compChart = new Chart(ctx, {
                     type: 'bar', data: {
                         labels: hours, datasets: [
-                            { label: '今天', data: todayData, backgroundColor: 'rgba(79,195,247,.6)', borderRadius: 3, barPercentage: .4 },
-                            { label: '昨天', data: ydayData, backgroundColor: 'rgba(179,136,255,.3)', borderRadius: 3, barPercentage: .4 }
+                            { label: '今天', data: todayData, backgroundColor: 'rgba(88,166,255,.6)', borderRadius: 3, barPercentage: .4 },
+                            { label: '昨天', data: ydayData, backgroundColor: 'rgba(121,192,255,.3)', borderRadius: 3, barPercentage: .4 }
                         ]
                     }, options: {
-                        responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#9fa8da', font: { size: 10 } } } },
-                        scales: { x: { grid: { display: false }, ticks: { color: '#5c6bc0', font: { size: 9 }, maxTicksLimit: 12 } }, y: { grid: { color: 'rgba(255,255,255,.02)' }, ticks: { color: '#5c6bc0', font: { size: 9 } }, beginAtZero: true } }
+                        responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8b949e', font: { size: 10 } } } },
+                        scales: { x: { grid: { display: false }, ticks: { color: '#6e7681', font: { size: 9 }, maxTicksLimit: 12 } }, y: { grid: { color: 'rgba(255,255,255,.02)' }, ticks: { color: '#6e7681', font: { size: 9 } }, beginAtZero: true } }
                     }
                 });
             } catch (e) { console.error(e) }
@@ -1235,10 +1270,10 @@
                 // 趋势
                 if (gdChart) gdChart.destroy();
                 const ctx = document.getElementById('gdChart').getContext('2d');
-                const g = ctx.createLinearGradient(0, 0, 0, 180); g.addColorStop(0, 'rgba(179,136,255,.25)'); g.addColorStop(1, 'rgba(179,136,255,0)');
+                const g = ctx.createLinearGradient(0, 0, 0, 180); g.addColorStop(0, 'rgba(121,192,255,.25)'); g.addColorStop(1, 'rgba(121,192,255,0)');
                 gdChart = new Chart(ctx, {
-                    type: 'line', data: { labels: d.trends.map(t => BJ(t.hour)), datasets: [{ data: d.trends.map(t => t.count), borderColor: '#b388ff', backgroundColor: g, fill: true, tension: .4, borderWidth: 2, pointRadius: 0 }] },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,.02)' }, ticks: { color: '#5c6bc0', font: { size: 9 }, maxTicksLimit: 10, maxRotation: 0 } }, y: { grid: { color: 'rgba(255,255,255,.02)' }, ticks: { color: '#5c6bc0', font: { size: 9 } }, beginAtZero: true } } }
+                    type: 'line', data: { labels: d.trends.map(t => BJ(t.hour)), datasets: [{ data: d.trends.map(t => t.count), borderColor: '#79c0ff', backgroundColor: g, fill: true, tension: .4, borderWidth: 2, pointRadius: 0 }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,.02)' }, ticks: { color: '#6e7681', font: { size: 9 }, maxTicksLimit: 10, maxRotation: 0 } }, y: { grid: { color: 'rgba(255,255,255,.02)' }, ticks: { color: '#6e7681', font: { size: 9 } }, beginAtZero: true } } }
                 });
                 // 用户
                 document.getElementById('gd-users').innerHTML = d.top_senders.map((u, i) => `<div class="usr"><div class="usr-rk">${RK[i] || (i + 1)}</div><div class="usr-name">${E(u.sender_name || '?')}</div><div class="usr-cnt">${u.msg_count} 条</div></div>`).join('') || '<div style="color:var(--text3)">暂无</div>';
@@ -1314,7 +1349,7 @@
                     html += `<div class="hm-label">${DOW[d]}</div>`;
                     for (let h = 0; h < 24; h++) {
                         const v = matrix[d][h]; const intensity = v / maxVal;
-                        const color = intensity === 0 ? 'rgba(255,255,255,.02)' : `rgba(79,195,247,${(.1 + intensity * .7).toFixed(2)})`;
+                        const color = intensity === 0 ? 'rgba(255,255,255,.02)' : `rgba(88,166,255,${(.1 + intensity * .7).toFixed(2)})`;
                         html += `<div class="hm-cell" style="background:${color}" title="${DOW[d]} ${h}:00 — ${v} 条消息"></div>`;
                     }
                 }
@@ -1512,6 +1547,7 @@
         showPage('overview');
         startAutoRefresh();
     </script>
+
 </body>
 
 </html>

@@ -477,13 +477,16 @@ class MonitorBot:
         try:
             await bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
 
-            links = await self.db.get_links_aggregated(limit=count * 2)
-
-            # Python 层二次过滤，彻底排除漏网的 TG 链接
-            TG_DOMAINS = ("t.me", "telegram.me", "telegram.org", "telegra.ph", "telegram.dog")
-            links = [l for l in links
-                     if not any(d in (l.get("url") or "").lower() for d in TG_DOMAINS)]
-            links = links[:count]
+            # 动态加载过滤域名
+            block_domains = self.config.get("filtering", {}).get(
+                "block_domains", 
+                ["t.me", "telegram.me", "telegram.org", "telegra.ph", "telegram.dog"]
+            )
+            
+            links = await self.db.get_links_aggregated(
+                limit=count, 
+                block_domains=block_domains
+            )
 
             if not links:
                 await bot.send_message(chat_id=chat_id, text="📭 暂无链接记录。")

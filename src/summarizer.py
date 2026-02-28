@@ -293,7 +293,7 @@ class Summarizer:
 
             async with sem:  # 每个 key 独立限速
                 try:
-                    async with httpx.AsyncClient(timeout=120) as client:
+                    async with httpx.AsyncClient(timeout=60.0) as client:
                         resp = await client.post(
                             self.api_url,
                             json=payload,
@@ -322,6 +322,11 @@ class Summarizer:
                     if status == 429:
                         logger.info("⚠️ 触发限速(429)，自动切换到下一个 key 重试...")
                         continue
+                    # 5xx 服务端错误快重试或返回（避免持续死锁）
+                    if status >= 500:
+                        logger.warning(f"⚠️ AI代理服务端错误: {status}")
+                        if attempt >= 1:  # 最多一次重试
+                            return f"❌ AI代理服务端错误: {status}"
 
                 except Exception as e:
                     last_error = str(e)

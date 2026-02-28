@@ -155,6 +155,9 @@ class Collector:
             f"{gap_start.strftime('%H:%M:%S')} → "
             f"{now.strftime('%H:%M:%S')} ({gap_hours:.1f}h)，并发回填 {len(self._monitored_ids)} 个群组..."
         )
+        
+        # P1.3 修复：提供批量插入锁，避免在并发抓取时造成 SQLite 锁竞争
+        _db_lock = asyncio.Lock()
 
         async def _recover_one(gid: int) -> int:
             """recover a single group, return number of messages recovered"""
@@ -177,7 +180,8 @@ class Collector:
                         batch.append(msg_dict)
 
                 if batch:
-                    await self.db.insert_messages_batch(batch)
+                    async with _db_lock:
+                        await self.db.insert_messages_batch(batch)
                     logger.info(f"   ✅ [{title}] 回填 {len(batch)} 条")
                 return len(batch)
             except Exception as e:
