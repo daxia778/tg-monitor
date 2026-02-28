@@ -98,11 +98,11 @@ class Summarizer:
         # 计算时间范围
         now = datetime.now(timezone.utc)
         if hours is not None:
-            since = (now - timedelta(hours=hours)).isoformat()
+            since = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
         if since is None:
-            since = (now - timedelta(hours=24)).isoformat()
+            since = (now - timedelta(hours=24)).isoformat(timespec='seconds')
         if until is None:
-            until = now.isoformat()
+            until = now.isoformat(timespec='seconds')
 
         if progress_cb:
             await progress_cb("🔍 正在从数据库提取消息...", 1, 10)
@@ -385,8 +385,8 @@ class Summarizer:
     async def summarize_per_group(self, hours: float = 24, save: bool = True, progress_cb: Optional[Any] = None) -> str:
         """按群组分别摘要，再合并为总结报告 (已改为并发执行)"""
         now = datetime.now(timezone.utc)
-        since = (now - timedelta(hours=hours)).isoformat()
-        until = now.isoformat()
+        since = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
+        until = now.isoformat(timespec='seconds')
 
         if progress_cb:
             await progress_cb("🔍 正在初始化群组列表...", 1, 10)
@@ -517,7 +517,7 @@ class Summarizer:
         """每日报告（使用按群组分别摘要）"""
         # 获取统计
         now = datetime.now(timezone.utc)
-        since = (now - timedelta(hours=24)).isoformat()
+        since = (now - timedelta(hours=24)).isoformat(timespec='seconds')
         stats = await self.db.get_stats(since=since)
 
         stats_text = "📊 今日数据概览:\n\n"

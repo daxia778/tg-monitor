@@ -269,7 +269,7 @@ class Database:
         self, group_id: int, title: str, username: Optional[str] = None,
         member_count: Optional[int] = None
     ):
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone.utc).isoformat(timespec='seconds')
         await self._db.execute(
             """INSERT INTO groups (id, title, username, member_count, updated_at)
                VALUES (?, ?, ?, ?, ?)
@@ -531,7 +531,7 @@ class Database:
     async def get_recent_alerted_ids(self, hours: int = 24) -> set:
         """加载最近 N 小时内已告警的 msg_key 集合（进程重启后恢复去重状态）"""
         try:
-            since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+            since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat(timespec='seconds')
             cursor = await self._db.execute(
                 "SELECT msg_key FROM alerted_messages WHERE alerted_at >= ?",
                 (since,),
@@ -545,7 +545,7 @@ class Database:
     async def cleanup_old_alerts(self, keep_hours: int = 48):
         """清理超期告警记录，防止表无限增长"""
         try:
-            cutoff = (datetime.now(timezone.utc) - timedelta(hours=keep_hours)).isoformat()
+            cutoff = (datetime.now(timezone.utc) - timedelta(hours=keep_hours)).isoformat(timespec='seconds')
             await self._db.execute(
                 "DELETE FROM alerted_messages WHERE alerted_at < ?",
                 (cutoff,),
@@ -578,6 +578,7 @@ class Database:
             """SELECT s.*, g.title as group_title
                FROM summaries s
                LEFT JOIN groups g ON s.group_id = g.id
+               WHERE s.content NOT LIKE '%⚠️ 摘要生成失败%' AND s.content NOT LIKE '%❌%'
                ORDER BY s.created_at DESC LIMIT ?""",
             (limit,),
         )
@@ -680,7 +681,7 @@ class Database:
     ) -> List[dict]:
         """按星期×小时统计消息分布（用于活跃度热力图）"""
         now = datetime.now(timezone.utc)
-        since = (now - timedelta(days=days)).isoformat()
+        since = (now - timedelta(days=days)).isoformat(timespec='seconds')
         cursor = await self._db.execute(
             """SELECT
                  CAST(strftime('%w', date) AS INTEGER) as dow,
@@ -709,7 +710,7 @@ class Database:
                       COUNT(*) as count
                FROM messages WHERE date >= ?
                GROUP BY hour ORDER BY hour""",
-            (today_start.isoformat(),),
+            (today_start.isoformat(timespec='seconds'),),
         )
         today = [dict(r) for r in await cursor_today.fetchall()]
 
@@ -719,7 +720,7 @@ class Database:
                       COUNT(*) as count
                FROM messages WHERE date >= ? AND date < ?
                GROUP BY hour ORDER BY hour""",
-            (yesterday_start.isoformat(), today_start.isoformat()),
+            (yesterday_start.isoformat(timespec='seconds'), today_start.isoformat(timespec='seconds')),
         )
         yesterday = [dict(r) for r in await cursor_yesterday.fetchall()]
 
@@ -733,7 +734,7 @@ class Database:
     ) -> List[dict]:
         """获取指定群组的最新消息"""
         now = datetime.now(timezone.utc)
-        since = (now - timedelta(hours=hours)).isoformat()
+        since = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
         cursor = await self._db.execute(
             """SELECT m.*, g.title as group_title
                FROM messages m
@@ -752,7 +753,7 @@ class Database:
     ) -> List[dict]:
         """获取指定群组的消息趋势"""
         now = datetime.now(timezone.utc)
-        since = (now - timedelta(hours=hours)).isoformat()
+        since = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
         cursor = await self._db.execute(
             """SELECT
                  strftime('%Y-%m-%dT%H:00:00', date) as hour,
@@ -803,7 +804,7 @@ class Database:
     async def get_message_trends(self, hours: int = 72) -> List[dict]:
         """按小时统计消息趋势（用于 Dashboard /api/trends）"""
         now = datetime.now(timezone.utc)
-        since = (now - timedelta(hours=hours)).isoformat()
+        since = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
         cursor = await self._db.execute(
             """SELECT strftime('%Y-%m-%dT%H:00:00', date) as hour, COUNT(*) as count
                FROM messages WHERE date >= ?
@@ -926,7 +927,7 @@ class Database:
         同步清理关联的 links 记录。
         返回删除条数。
         """
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=keep_days)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=keep_days)).isoformat(timespec='seconds')
         try:
             # 先清理 links（外键依赖 messages.id）
             await self._db.execute(

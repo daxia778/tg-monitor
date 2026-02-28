@@ -12,7 +12,7 @@ COPY pyproject.toml ./
 COPY src/ ./src/
 
 # Install project into a target directory for copying
-RUN pip install --no-cache-dir --prefix=/install -e .
+RUN pip install --no-cache-dir --prefix=/install .
 
 # ────────── Stage 2: Runtime ──────────
 FROM python:3.11-slim AS runtime
@@ -29,7 +29,7 @@ COPY --from=builder /install /usr/local
 
 # Copy application source
 COPY src/ ./src/
-COPY config.example.yaml ./config.yaml
+COPY config.example.yaml ./config.example.yaml
 
 # Create data directory
 RUN mkdir -p /app/data
@@ -37,6 +37,8 @@ RUN mkdir -p /app/data
 # Expose dashboard port
 EXPOSE 8050
 
-# Default entrypoint — override CMD in docker-compose per service
-ENTRYPOINT ["python", "-m", "src.cli"]
+# Shell entrypoint: auto-copy example config if no config.yaml is mounted
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["start", "dashboard"]

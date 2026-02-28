@@ -377,6 +377,12 @@ class Collector:
             except Exception as e:
                 if not self._running:
                     break
+                if type(e).__name__ == "FloodWaitError":
+                    wait_time = getattr(e, 'seconds', reconnect_delay)
+                    logger.warning(f"⚠️ 触发 FloodWait 限制，强制等待 {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                    continue
+
                 logger.warning(
                     f"⚠️ 连接断开: {e}，{reconnect_delay}s 后尝试重连..."
                 )
@@ -458,7 +464,7 @@ class Collector:
             "sender_id": message.sender_id,
             "sender_name": _get_sender_name(sender),
             "text": message.text or message.message,
-            "date": message.date.isoformat(),
+            "date": message.date.isoformat(timespec='seconds'),
             "media_type": _get_media_type(message.media),
             "forward_from": _get_forward_info(message.fwd_from),
             "reply_to_id": (

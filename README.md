@@ -30,7 +30,28 @@ tg-monitor/
 └── pyproject.toml      # 项目依赖
 ```
 
-## 🚀 快速开始
+## 🐳 Docker 部署
+
+镜像由 GitHub Actions 自动构建，推送至 GitHub Container Registry（GHCR）。
+
+```bash
+# 1. 拉取镜像（替换 YOUR_USERNAME）
+docker pull ghcr.io/YOUR_USERNAME/tg-monitor:latest
+
+# 2. 准备配置文件
+cp .env.example .env          # 填入 API Key / Token
+cp config.example.yaml config.yaml  # 配置监控群组
+
+# 3. 一键启动所有服务（采集器 + Bot + Dashboard）
+docker compose up -d
+
+# 4. 查看日志
+docker compose logs -f
+```
+
+> **注意：** 首次启动需要完成 Telethon 会话认证（交互式登录），建议先以非 Docker 方式运行 `tg-monitor start collector` 完成认证，再将生成的 `.session` 文件映射进容器。
+
+## 🚀 快速开始（本地）
 
 ### 1. 克隆项目
 

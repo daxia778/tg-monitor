@@ -78,9 +78,9 @@ async def api_overview():
     now = datetime.now(timezone.utc)
 
     total = await db.get_message_count()
-    h1 = await db.get_message_count(since=(now - timedelta(hours=1)).isoformat())
-    h24 = await db.get_message_count(since=(now - timedelta(hours=24)).isoformat())
-    h7d = await db.get_message_count(since=(now - timedelta(days=7)).isoformat())
+    h1 = await db.get_message_count(since=(now - timedelta(hours=1)).isoformat(timespec='seconds'))
+    h24 = await db.get_message_count(since=(now - timedelta(hours=24)).isoformat(timespec='seconds'))
+    h7d = await db.get_message_count(since=(now - timedelta(days=7)).isoformat(timespec='seconds'))
     groups = await db.get_groups()
 
     # 链接和摘要统计
@@ -126,7 +126,7 @@ async def api_groups(hours: int = Query(default=24)):
     """群组统计"""
     db = await get_db()
     now = datetime.now(timezone.utc)
-    since = (now - timedelta(hours=hours)).isoformat()
+    since = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
     stats = await db.get_stats(since=since)
     return {"data": stats}
 
@@ -144,7 +144,7 @@ async def api_group_detail(group_id: int, hours: int = Query(default=24)):
 
     # 活跃用户
     now = datetime.now(timezone.utc)
-    since = (now - timedelta(hours=hours)).isoformat()
+    since = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
     top = await db.get_top_senders(group_id=group_id, since=since, limit=5)
 
     return {
@@ -160,7 +160,7 @@ async def api_top_senders(hours: int = Query(default=24), limit: int = Query(def
     """最活跃用户"""
     db = await get_db()
     now = datetime.now(timezone.utc)
-    since = (now - timedelta(hours=hours)).isoformat()
+    since = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
     top = await db.get_top_senders(since=since, limit=limit)
     return {"data": top}
 
@@ -234,7 +234,7 @@ async def api_export(
     """CSV 数据导出"""
     db = await get_db()
     now = datetime.now(timezone.utc)
-    since = (now - timedelta(hours=hours)).isoformat()
+    since = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
 
     rows = await db.export_messages(since=since, group_id=group_id, limit=max_rows)
 
@@ -286,7 +286,7 @@ def _cleanup_summary_tasks():
     now = datetime.now(timezone.utc)
     to_delete = []
     for tid, task in _summary_tasks.items():
-        started_str = task.get("started_at", now.isoformat())
+        started_str = task.get("started_at", now.isoformat(timespec='seconds'))
         try:
             started = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
             if started.tzinfo is None:
@@ -358,7 +358,7 @@ async def api_summary_generate(
         "error": None,
         "hours": hours,
         "mode": mode,
-        "started_at": datetime.now(timezone.utc).isoformat(),
+        "started_at": datetime.now(timezone.utc).isoformat(timespec='seconds'),
     }
 
     async def _run_summary():
@@ -381,7 +381,7 @@ async def api_summary_generate(
                 _summary_tasks[task_id]["result"] = result
                 # 最后的 msg_count 更新（可选）
                 _summary_tasks[task_id]["msg_count"] = await db.get_message_count(
-                    since=(datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+                    since=(datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat(timespec='seconds')
                 )
             else:
                 _summary_tasks[task_id]["status"] = "error"

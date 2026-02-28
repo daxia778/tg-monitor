@@ -343,8 +343,8 @@ class MonitorBot:
         await bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
 
         now = datetime.now(timezone.utc)
-        since = (now - timedelta(hours=hours)).isoformat()
-        until = now.isoformat()
+        since = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
+        until = now.isoformat(timespec='seconds')
         msg_count = await self.db.get_message_count(since=since)
         date_range = await self.db.get_date_range(since=since)
 
@@ -423,7 +423,7 @@ class MonitorBot:
         await bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
 
         now = datetime.now(timezone.utc)
-        since = (now - timedelta(hours=hours)).isoformat()
+        since = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
 
         stats = await self.db.get_stats(since=since)
         top_senders = await self.db.get_top_senders(since=since, limit=5)
@@ -620,7 +620,7 @@ class MonitorBot:
 
         # 使用工厂方法生成限速进度回调（P0#3 修复：消除重复代码）
         msg_count_24h = await self.db.get_message_count(
-            since=(datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+            since=(datetime.now(timezone.utc) - timedelta(hours=24)).isoformat(timespec='seconds')
         )
         progress_cb = self._make_progress_cb(progress_msg, msg_count_24h)
 
@@ -644,7 +644,7 @@ class MonitorBot:
                 pass
 
             msg_count = await self.db.get_message_count(
-                since=(datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+                since=(datetime.now(timezone.utc) - timedelta(hours=24)).isoformat(timespec='seconds')
             )
 
             header = (
@@ -700,7 +700,7 @@ class MonitorBot:
 
         now = datetime.now(timezone.utc)
         recent_count = await self.db.get_message_count(
-            since=(now - timedelta(hours=1)).isoformat()
+            since=(now - timedelta(hours=1)).isoformat(timespec='seconds')
         )
 
         # B3 修复：显示数据库最新消息的实际时间，让用户能判断 collector 是否在正常工作

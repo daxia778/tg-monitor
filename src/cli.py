@@ -331,7 +331,7 @@ def stats(ctx, hours):
         db = await _get_db(cfg)
 
         now = datetime.now(timezone.utc)
-        since = (now - timedelta(hours=hours)).isoformat()
+        since = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
 
         results = await db.get_stats(since=since)
 
