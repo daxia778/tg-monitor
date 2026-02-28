@@ -9,6 +9,7 @@ import type { GroupStat } from './components/GroupList';
 import { SearchPage } from './components/SearchPage';
 import { SummariesPage } from './components/SummariesPage';
 import { LinksPage } from './components/LinksPage';
+import { SettingsPage } from './components/SettingsPage';
 
 type OverviewData = {
   total_messages: number;
@@ -211,6 +212,8 @@ export default function App() {
         return <SummariesPage />;
       case 'links':
         return <LinksPage />;
+      case 'settings':
+        return <SettingsPage />;
       default:
         return null;
     }

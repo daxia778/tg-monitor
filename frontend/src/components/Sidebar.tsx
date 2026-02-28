@@ -27,8 +27,8 @@ export function Sidebar({ activeItem, onNavigate }: SidebarProps) {
                         id={`nav-${item.id}`}
                         onClick={() => onNavigate(item.id)}
                         className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg text-[13px] font-medium transition-all text-left cursor-pointer border-0 ${activeItem === item.id
-                                ? 'bg-bg-hover text-accent border-l-[3px] border-accent'
-                                : 'text-text2 bg-transparent hover:bg-bg-hover hover:text-text-main'
+                            ? 'bg-bg-hover text-accent border-l-[3px] border-accent'
+                            : 'text-text2 bg-transparent hover:bg-bg-hover hover:text-text-main'
                             }`}
                     >
                         <span className="text-base w-5 text-center">{item.icon}</span>
@@ -40,7 +40,11 @@ export function Sidebar({ activeItem, onNavigate }: SidebarProps) {
 
                 <button
                     id="nav-settings"
-                    className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg text-[13px] font-medium text-text2 bg-transparent hover:bg-bg-hover hover:text-text-main transition-all border-0 cursor-pointer"
+                    onClick={() => onNavigate('settings')}
+                    className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg text-[13px] font-medium transition-all text-left cursor-pointer border-0 ${activeItem === 'settings'
+                            ? 'bg-bg-hover text-accent border-l-[3px] border-accent'
+                            : 'text-text2 bg-transparent hover:bg-bg-hover hover:text-text-main'
+                        }`}
                 >
                     <span className="text-base w-5 text-center">⚙️</span>
                     偏好设置

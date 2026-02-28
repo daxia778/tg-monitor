@@ -5,6 +5,7 @@ const PAGE_TITLES: Record<string, string> = {
     search: '全库搜索',
     summaries: '所有摘要',
     links: '链接收集',
+    settings: '偏好设置与系统状态',
 };
 
 interface TopbarProps {
