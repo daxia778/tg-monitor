@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 
@@ -64,10 +64,9 @@ async def index():
 # ═══════════════════════════════════════════
 
 @app.get("/api/health")
-async def api_health():
+async def api_health(db: Database = Depends(get_db)):
     """健康检查 (增强版)"""
     try:
-        db = await get_db()
         total = await db.get_message_count()
         groups = await db.get_groups()
         
@@ -93,9 +92,8 @@ async def api_health():
 
 
 @app.get("/api/overview")
-async def api_overview():
+async def api_overview(db: Database = Depends(get_db)):
     """总览数据"""
-    db = await get_db()
     now = datetime.now(timezone.utc)
 
     total = await db.get_message_count()
@@ -120,32 +118,28 @@ async def api_overview():
 
 
 @app.get("/api/trends")
-async def api_trends(hours: int = Query(default=72, ge=1, le=720)):
+async def api_trends(hours: int = Query(default=72, ge=1, le=720), db: Database = Depends(get_db)):
     """消息趋势数据"""
-    db = await get_db()
     rows = await db.get_message_trends(hours=hours)
     return {"data": [{"hour": r["hour"], "count": r["count"]} for r in rows]}
 
 
 @app.get("/api/comparison")
-async def api_comparison():
+async def api_comparison(db: Database = Depends(get_db)):
     """今天 vs 昨天消息量对比"""
-    db = await get_db()
     return await db.get_hourly_comparison()
 
 
 @app.get("/api/heatmap")
-async def api_heatmap(days: int = Query(default=30)):
+async def api_heatmap(days: int = Query(default=30), db: Database = Depends(get_db)):
     """活跃度热力图数据"""
-    db = await get_db()
     data = await db.get_heatmap_data(days=days)
     return {"data": data}
 
 
 @app.get("/api/groups")
-async def api_groups(hours: int = Query(default=24)):
+async def api_groups(hours: int = Query(default=24), db: Database = Depends(get_db)):
     """群组统计"""
-    db = await get_db()
     now = datetime.now(timezone.utc)
     since = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
     stats = await db.get_stats(since=since)
@@ -153,9 +147,8 @@ async def api_groups(hours: int = Query(default=24)):
 
 
 @app.get("/api/groups/{group_id}")
-async def api_group_detail(group_id: int, hours: int = Query(default=24)):
+async def api_group_detail(group_id: int, hours: int = Query(default=24), db: Database = Depends(get_db)):
     """群组详情 — 消息列表"""
-    db = await get_db()
     messages = await db.get_group_messages(group_id, hours=hours, limit=200)
     trends = await db.get_group_trends(group_id, hours=max(hours, 72))
 
@@ -177,9 +170,8 @@ async def api_group_detail(group_id: int, hours: int = Query(default=24)):
 
 
 @app.get("/api/top_senders")
-async def api_top_senders(hours: int = Query(default=24), limit: int = Query(default=10)):
+async def api_top_senders(hours: int = Query(default=24), limit: int = Query(default=10), db: Database = Depends(get_db)):
     """最活跃用户"""
-    db = await get_db()
     now = datetime.now(timezone.utc)
     since = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
     top = await db.get_top_senders(since=since, limit=limit)
@@ -187,9 +179,8 @@ async def api_top_senders(hours: int = Query(default=24), limit: int = Query(def
 
 
 @app.get("/api/links")
-async def api_links(limit: int = Query(default=30)):
+async def api_links(limit: int = Query(default=30), db: Database = Depends(get_db)):
     """最新链接"""
-    db = await get_db()
     config = _config or load_config()
     
     # 动态加载过滤域名，默认过滤内部短链接
@@ -203,15 +194,14 @@ async def api_links(limit: int = Query(default=30)):
 
 
 @app.get("/api/search")
-async def api_search(q: str = Query(..., min_length=1), limit: int = Query(default=50)):
+async def api_search(q: str = Query(..., min_length=1), limit: int = Query(default=50), db: Database = Depends(get_db)):
     """搜索消息"""
-    db = await get_db()
     results = await db.search_messages(q, limit=limit)
     return {"data": results, "total": len(results)}
 
 
 @app.get("/api/alerts_config")
-async def api_alerts_config():
+async def api_alerts_config(db: Database = Depends(get_db)):
     """告警配置"""
     config = _config or load_config()
     alerts = config.get("alerts", {})
@@ -225,9 +215,8 @@ async def api_alerts_config():
 async def api_recent_messages(
     limit: int = Query(default=100, le=500),
     group_id: Optional[int] = Query(default=None),
-):
+, db: Database = Depends(get_db)):
     """最新消息流（始终返回最新的 N 条）"""
-    db = await get_db()
     messages = await db.get_recent_messages(limit=limit, group_id=group_id)
 
     groups = await db.get_groups()
@@ -251,14 +240,10 @@ async def api_export(
     group_id: Optional[int] = Query(default=None),
     # D4 修复：加条数上限参数，防止全量导出 OOM 或超时
     max_rows: int = Query(default=10000, le=50000, description="最多导出条数"),
-):
+, db: Database = Depends(get_db)):
     """CSV 数据导出"""
-    db = await get_db()
     now = datetime.now(timezone.utc)
     since = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
-
-    rows = await db.export_messages(since=since, group_id=group_id, limit=max_rows)
-
     filename = f"tg_monitor_export_{now.strftime('%Y%m%d_%H%M')}.csv"
     
     async def generate_csv():
@@ -270,8 +255,13 @@ async def api_export(
         output.seek(0)
         
         chunk_size = 500
-        for i in range(0, len(rows), chunk_size):
-            chunk = rows[i:i + chunk_size]
+        total_fetched = 0
+        while total_fetched < max_rows:
+            fetch_limit = min(chunk_size, max_rows - total_fetched)
+            chunk = await db.export_messages(since=since, group_id=group_id, limit=fetch_limit, offset=total_fetched)
+            if not chunk:
+                break
+                
             for r in chunk:
                 writer.writerow([
                     r["id"], r.get("group_title", ""), r.get("sender_name", ""),
@@ -281,8 +271,10 @@ async def api_export(
             yield output.getvalue()
             output.truncate(0)
             output.seek(0)
+            total_fetched += len(chunk)
 
     return StreamingResponse(
+
         generate_csv(),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
@@ -298,33 +290,9 @@ import uuid
 import httpx
 from .summarizer import Summarizer
 
-# 异步任务追踪
-_summary_tasks: dict = {}  # task_id -> {status, progress, result, error, ...}
-
-
-def _cleanup_summary_tasks():
-    """清理超期（超过1小时的完成任务或超过6小时的运行任务）避免内存泄漏"""
-    now = datetime.now(timezone.utc)
-    to_delete = []
-    for tid, task in _summary_tasks.items():
-        started_str = task.get("started_at", now.isoformat(timespec='seconds'))
-        try:
-            started = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
-            if started.tzinfo is None:
-                started = started.replace(tzinfo=timezone.utc)
-        except Exception:
-            started = now
-            
-        is_finished = task.get("status") in ("done", "error")
-        age_hours = (now - started).total_seconds() / 3600
-        if (is_finished and age_hours > 1) or (not is_finished and age_hours > 6):
-            to_delete.append(tid)
-    for tid in to_delete:
-        del _summary_tasks[tid]
-
 
 @app.get("/api/llm/status")
-async def api_llm_status():
+async def api_llm_status(db: Database = Depends(get_db)):
     """检测 LLM 代理连接状态"""
     config = _config or load_config()
     ai_cfg = config.get("ai", {})
@@ -361,35 +329,27 @@ async def api_llm_status():
 async def api_summary_generate(
     hours: int = Query(default=24, ge=1, le=720),
     mode: str = Query(default="quick", regex="^(quick|per_group)$"),
-):
+, db: Database = Depends(get_db)):
     """触发摘要生成（异步任务，返回 task_id 用于轮询进度）"""
     config = _config or load_config()
-    db = await get_db()
 
-    # 触发前先清理过期任务释放内存
-    _cleanup_summary_tasks()
-
-    task_id = str(uuid.uuid4())[:8]
-    _summary_tasks[task_id] = {
-        "status": "running",
-        "progress": "正在初始化...",
-        "current_step": 0,
-        "total_steps": 10,
-        "result": None,
-        "error": None,
-        "hours": hours,
-        "mode": mode,
-        "started_at": datetime.now(timezone.utc).isoformat(timespec='seconds'),
-    }
+    task_id = str(uuid.uuid4())[:12]
+    
+    # 将任务存入数据库
+    await db.create_summary_job(task_id, group_id=None, hours=hours, mode=mode)
 
     async def _run_summary():
         try:
             summarizer = Summarizer(config, db)
             
             async def progress_cb(text, current, total):
-                _summary_tasks[task_id]["progress"] = text
-                _summary_tasks[task_id]["current_step"] = current
-                _summary_tasks[task_id]["total_steps"] = total
+                # 将进度百分比折算为 0~100 的整数
+                progress_pct = int((current / max(total, 1)) * 100)
+                await db.update_summary_job(
+                    task_id,
+                    progress=progress_pct,
+                    progress_text=f"{text} ({current}/{total})"
+                )
                 logger.info(f"Task {task_id} Progress: {text} ({current}/{total})")
 
             if mode == "per_group":
@@ -398,38 +358,41 @@ async def api_summary_generate(
                 result = await summarizer.summarize(hours=hours, save=True, progress_cb=progress_cb)
 
             if result and not result.startswith("❌"):
-                _summary_tasks[task_id]["status"] = "done"
-                _summary_tasks[task_id]["result"] = result
-                # 最后的 msg_count 更新（可选）
-                _summary_tasks[task_id]["msg_count"] = await db.get_message_count(
-                    since=(datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat(timespec='seconds')
-                )
+                await db.update_summary_job(task_id, status="done", result=result, progress=100)
             else:
-                _summary_tasks[task_id]["status"] = "error"
-                _summary_tasks[task_id]["error"] = result or "LLM 返回空结果，请检查 AI 代理是否在线"
+                error_msg = result or "LLM 返回空结果，请检查 AI 代理是否在线"
+                await db.update_summary_job(task_id, status="error", error_msg=error_msg)
 
         except Exception as e:
             logger.error(f"摘要生成失败: {e}", exc_info=True)
-            _summary_tasks[task_id]["status"] = "error"
-            _summary_tasks[task_id]["error"] = f"{type(e).__name__}: {str(e)[:300]}"
+            await db.update_summary_job(task_id, status="error", error_msg=f"{type(e).__name__}: {str(e)[:300]}")
 
     asyncio.create_task(_run_summary())
     return {"task_id": task_id, "status": "running"}
 
 
 @app.get("/api/summary/status/{task_id}")
-async def api_summary_status(task_id: str):
+async def api_summary_status(task_id: str, db: Database = Depends(get_db)):
     """查询摘要生成任务状态"""
-    task = _summary_tasks.get(task_id)
+    task = await db.get_summary_job(task_id)
     if not task:
-        return {"status": "not_found", "error": "任务不存在或已过期"}
-    return task
+        return {"status": "not_found", "error": "任务不存在"}
+    
+    # 转换为前端期待的格式以保持兼容性
+    return {
+        "status": task["status"],
+        "progress": task["progress_text"] or "",
+        "current_step": task["progress"],  # 前端用 current_step/total_steps 算百分比
+        "total_steps": 100,               # 配合 progress=0-100 使用
+        "result": task["result"],
+        "error": task["error_msg"],
+    }
+
 
 
 @app.get("/api/summary/history")
-async def api_summary_history(limit: int = Query(default=10, le=50)):
+async def api_summary_history(limit: int = Query(default=10, le=50), db: Database = Depends(get_db)):
     """获取历史摘要"""
-    db = await get_db()
     summaries = await db.get_latest_summaries(limit=limit)
     return {"data": summaries}
 

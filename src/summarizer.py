@@ -188,7 +188,7 @@ class Summarizer:
 
             # S4 修复：截断超长消息，防止单条消息撑爆 LLM context window
             if len(text) > 500:
-                text = text[:500] + "...(截断)"
+                text = text[:250] + "\n...[长文本截断]...\n" + text[-250:]
 
             line = f"[{date_str}] {sender}: {text}{extra_str}"
             lines.append(line)

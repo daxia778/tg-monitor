@@ -19,9 +19,20 @@ venv/
 dist/
 *.egg-info/
 
+# Frontend build artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/.npm_cache/
+frontend/.vite/
+
 # IDE
 .vscode/
 .idea/
 
 # OS
 .DS_Store
+
+# One-off helpers (not part of core codebase)
+patch.js
+update_html.py
+src/web/static/index.html.new

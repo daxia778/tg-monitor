@@ -55,6 +55,20 @@ CREATE TABLE IF NOT EXISTS summaries (
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS summary_jobs (
+    id           TEXT PRIMARY KEY,
+    group_id     INTEGER,
+    hours        INTEGER,
+    mode         TEXT,
+    status       TEXT,
+    progress     INTEGER DEFAULT 0,
+    progress_text TEXT,
+    result       TEXT,
+    error_msg    TEXT,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_messages_group_date ON messages(group_id, date);
 CREATE INDEX IF NOT EXISTS idx_messages_date ON messages(date);
 CREATE INDEX IF NOT EXISTS idx_links_group ON links(group_id, discovered_at);
@@ -129,7 +143,7 @@ class DatabaseConnection:
         self.conn = await aiosqlite.connect(self.db_path)
         self.conn.row_factory = aiosqlite.Row
         
-        await self.conn.execute("PRAGMA busy_timeout=5000")
+        await self.conn.execute("PRAGMA busy_timeout=60000")
         await self.conn.execute("PRAGMA journal_mode=WAL")
         await self.conn.execute("PRAGMA cache_size = -32000")
         await self.conn.execute("PRAGMA temp_store = MEMORY")

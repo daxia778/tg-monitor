@@ -89,6 +89,8 @@ class Collector:
         self._group_names: Dict[int, str] = {}
         # 消息缺口恢复：记录最后一条消息的时间
         self._last_msg_time: Optional[datetime] = None
+        self._msg_queue: asyncio.Queue = asyncio.Queue()
+        self._batch_task: Optional[asyncio.Task] = None
 
     async def start(self):
         """初始化 Telethon 客户端"""
@@ -250,7 +252,7 @@ class Collector:
             try:
                 msg_dict = await self._message_to_dict(event.message)
                 if msg_dict:
-                    await self.db.insert_message(msg_dict)
+                    self._msg_queue.put_nowait(msg_dict)
                     # 更新最后消息时间（用于缺口恢复）
                     msg_date = event.message.date
                     if msg_date:
@@ -339,10 +341,43 @@ class Collector:
 
         logger.info("🚀 实时监控已启动（采集+编辑/删除同步），按 Ctrl+C 停止")
 
+        # 启动写缓冲队列消费者
+        async def _batch_inserter():
+            while self._running:
+                batch = []
+                try:
+                    msg = await asyncio.wait_for(self._msg_queue.get(), timeout=1.0)
+                    batch.append(msg)
+                    while len(batch) < 50:
+                        try:
+                            msg = self._msg_queue.get_nowait()
+                            batch.append(msg)
+                        except asyncio.QueueEmpty:
+                            break
+                except asyncio.TimeoutError:
+                    pass
+                except Exception as e:
+                    logger.error(f"消息队列提取异常: {e}")
+                
+                if batch:
+                    try:
+                        await self.db.insert_messages_batch(batch)
+                        for _ in batch:
+                            self._msg_queue.task_done()
+                    except Exception as e:
+                        logger.error(f"批量插入异常: {e}", exc_info=True)
+
+        self._batch_task = asyncio.create_task(_batch_inserter())
+
         # 後台每日定期清理老消息（默认保留 90 天）
         cleanup_days = self.config.get("monitoring", {}).get("keep_days", 90)
 
         async def _daily_cleanup():
+            # 启动时执行一次，防止应用在24小时内频繁重启导致数据一直堆积
+            logger.info(f"🧹 启动时执行数据库清理 (keep_days={cleanup_days})…")
+            await self.db.cleanup_old_messages(keep_days=cleanup_days)
+            await self.db.cleanup_old_alerts(keep_hours=48)
+
             while self._running:
                 await asyncio.sleep(24 * 3600)  # 每 24 小时执行一次
                 if not self._running:
@@ -391,8 +426,12 @@ class Collector:
 
         self._running = False
         cleanup_task.cancel()
+        if self._batch_task:
+            self._batch_task.cancel()
         try:
             await cleanup_task
+            if self._batch_task:
+                await self._batch_task
         except asyncio.CancelledError:
             pass
 

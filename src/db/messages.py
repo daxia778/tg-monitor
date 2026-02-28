@@ -272,6 +272,7 @@ class MessagesDAO:
         until: Optional[str] = None,
         group_id: Optional[int] = None,
         limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> List[dict]:
         conditions = []
         params = []
@@ -287,6 +288,7 @@ class MessagesDAO:
 
         where = "WHERE " + " AND ".join(conditions) if conditions else ""
         limit_clause = f"LIMIT {int(limit)}" if limit else ""
+        offset_clause = f" OFFSET {int(offset)}" if offset else ""
         cursor = await self.conn.execute(
             f"""SELECT m.id, m.group_id, g.title as group_title,
                        m.sender_name, m.text, m.date,
@@ -294,7 +296,7 @@ class MessagesDAO:
                 FROM messages m
                 LEFT JOIN groups g ON m.group_id = g.id
                 {where}
-                ORDER BY m.date ASC {limit_clause}""",
+                ORDER BY m.date ASC {limit_clause}{offset_clause}""",
             params,
         )
         rows = await cursor.fetchall()

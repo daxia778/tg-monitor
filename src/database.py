@@ -68,8 +68,8 @@ class Database:
     async def cleanup_old_messages(self, keep_days: int = 90) -> int:
         return await self.messages.cleanup_old_messages(keep_days)
 
-    async def export_messages(self, since: Optional[str] = None, until: Optional[str] = None, group_id: Optional[int] = None, limit: Optional[int] = None) -> List[dict]:
-        return await self.messages.export_messages(since, until, group_id, limit)
+    async def export_messages(self, since: Optional[str] = None, until: Optional[str] = None, group_id: Optional[int] = None, limit: Optional[int] = None, offset: Optional[int] = None) -> List[dict]:
+        return await self.messages.export_messages(since, until, group_id, limit, offset)
 
     async def get_recent_messages(self, limit: int = 100, group_id: Optional[int] = None) -> List[dict]:
         return await self.messages.get_recent_messages(limit, group_id)
@@ -122,3 +122,13 @@ class Database:
 
     async def get_group_trends(self, group_id: int, hours: int = 72) -> List[dict]:
         return await self.analytics.get_group_trends(group_id, hours)
+
+    # ─── 异步任务管理 (AnalyticsDAO) ───
+    async def create_summary_job(self, job_id: str, group_id: Optional[int], hours: int, mode: str):
+        return await self.analytics.create_summary_job(job_id, group_id, hours, mode)
+
+    async def update_summary_job(self, job_id: str, status: Optional[str] = None, progress: Optional[int] = None, progress_text: Optional[str] = None, result: Optional[str] = None, error_msg: Optional[str] = None):
+        return await self.analytics.update_summary_job(job_id, status, progress, progress_text, result, error_msg)
+
+    async def get_summary_job(self, job_id: str) -> Optional[dict]:
+        return await self.analytics.get_summary_job(job_id)

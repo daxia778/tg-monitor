@@ -200,3 +200,63 @@ class AnalyticsDAO:
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
+
+    async def create_summary_job(
+        self,
+        job_id: str,
+        group_id: Optional[int],
+        hours: int,
+        mode: str,
+    ):
+        await self.conn.execute(
+            """INSERT INTO summary_jobs (id, group_id, hours, mode, status, progress, progress_text)
+               VALUES (?, ?, ?, ?, 'running', 0, '初始化任务...')""",
+            (job_id, group_id, hours, mode)
+        )
+        await self.conn.commit()
+
+    async def update_summary_job(
+        self,
+        job_id: str,
+        status: Optional[str] = None,
+        progress: Optional[int] = None,
+        progress_text: Optional[str] = None,
+        result: Optional[str] = None,
+        error_msg: Optional[str] = None,
+    ):
+        updates = []
+        params: List[Any] = []
+        if status is not None:
+            updates.append("status = ?")
+            params.append(status)
+        if progress is not None:
+            updates.append("progress = ?")
+            params.append(progress)
+        if progress_text is not None:
+            updates.append("progress_text = ?")
+            params.append(progress_text)
+        if result is not None:
+            updates.append("result = ?")
+            params.append(result)
+        if error_msg is not None:
+            updates.append("error_msg = ?")
+            params.append(error_msg)
+
+        if not updates:
+            return
+
+        updates.append("updated_at = datetime('now')")
+        
+        query = f"UPDATE summary_jobs SET {', '.join(updates)} WHERE id = ?"
+        params.append(job_id)
+
+        await self.conn.execute(query, params)
+        await self.conn.commit()
+
+    async def get_summary_job(self, job_id: str) -> Optional[dict]:
+        cursor = await self.conn.execute(
+            "SELECT * FROM summary_jobs WHERE id = ?",
+            (job_id,)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
