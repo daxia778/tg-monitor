@@ -370,21 +370,44 @@ class Collector:
         self._batch_task = asyncio.create_task(_batch_inserter())
 
         # 後台每日定期清理老消息（默认保留 90 天）
-        cleanup_days = self.config.get("monitoring", {}).get("keep_days", 90)
+        async def _get_retention_days():
+            val = await self.db.get_setting("retention_days")
+            if val is not None:
+                try:
+                    return int(val)
+                except ValueError:
+                    pass
+            return self.config.get("monitoring", {}).get("keep_days", 90)
 
         async def _daily_cleanup():
             # 启动时执行一次，防止应用在24小时内频繁重启导致数据一直堆积
-            logger.info(f"🧹 启动时执行数据库清理 (keep_days={cleanup_days})…")
-            await self.db.cleanup_old_messages(keep_days=cleanup_days)
+            days = await _get_retention_days()
+            logger.info(f"🧹 启动时执行数据库清理 (keep_days={days})…")
+            await self.db.cleanup_old_messages(keep_days=days)
             await self.db.cleanup_old_alerts(keep_hours=48)
+            try:
+                await self.db._core.conn.execute("PRAGMA freelist_count;")  # just a dummy query mostly or actual VACUUM
+                # Note: VACUUM might block wal, avoid full block if not strictly needed or handle carefully.
+                logger.info("📦 开始执行 SQLite VACUUM 释放磁盘空间...")
+                await self.db._core.conn.execute("VACUUM")
+                logger.info("✅ SQLite VACUUM 执行完毕")
+            except Exception as e:
+                logger.warning(f"⚠️ VACUUM 执行失败: {e}")
 
             while self._running:
                 await asyncio.sleep(24 * 3600)  # 每 24 小时执行一次
                 if not self._running:
                     break
-                logger.info(f"🧹 定期清理启动 (keep_days={cleanup_days})…")
-                await self.db.cleanup_old_messages(keep_days=cleanup_days)
+                days = await _get_retention_days()
+                logger.info(f"🧹 定期清理启动 (keep_days={days})…")
+                await self.db.cleanup_old_messages(keep_days=days)
                 await self.db.cleanup_old_alerts(keep_hours=48)
+                try:
+                    logger.info("📦 开始执行 SQLite VACUUM 释放磁盘空间...")
+                    await self.db._core.conn.execute("VACUUM")
+                    logger.info("✅ SQLite VACUUM 执行完毕")
+                except Exception as e:
+                    logger.warning(f"⚠️ VACUUM 执行失败: {e}")
 
         cleanup_task = asyncio.create_task(_daily_cleanup())
 

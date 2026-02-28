@@ -11,6 +11,7 @@ import type { GroupStat } from './components/GroupList';
 import { SearchPage } from './components/SearchPage';
 import { SummariesPage } from './components/SummariesPage';
 import { LinksPage } from './components/LinksPage';
+import { GraphPage } from './components/GraphPage';
 import { Chatbot } from './components/Chatbot';
 import { SettingsPage } from './components/SettingsPage';
 import { TenantsPage } from './components/TenantsPage';
@@ -244,6 +245,8 @@ export default function App() {
         return <SummariesPage />;
       case 'links':
         return <LinksPage />;
+      case 'graph':
+        return <GraphPage />;
       case 'accounts':
         return <TenantsPage />;
       case 'settings':

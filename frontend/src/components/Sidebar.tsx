@@ -12,6 +12,7 @@ const NAV_ITEMS = [
     { id: 'chat', icon: '🤖', label: '私人智库' },
     { id: 'summaries', icon: '📝', label: '所有摘要' },
     { id: 'links', icon: '🔗', label: '链接收集' },
+    { id: 'graph', icon: '🕸️', label: '关系图谱' },
     { id: 'accounts', icon: '🪪', label: '账号管理' },
 ];
 

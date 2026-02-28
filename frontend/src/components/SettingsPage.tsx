@@ -31,6 +31,28 @@ export function SettingsPage() {
             .finally(() => setIsLoading(false));
     }, []);
 
+    const handleToggleAlerts = async () => {
+        if (!alerts) return;
+        const newStatus = !alerts.enabled;
+
+        try {
+            const res = await fetch('/api/alerts/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: newStatus }),
+            });
+            const data = await res.json();
+            if (res.ok && data.ok) {
+                setAlerts({ ...alerts, enabled: newStatus });
+            } else {
+                alert(data.detail || '切换告警状态失败');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('网络错误，无法连接后端');
+        }
+    };
+
     if (isLoading) {
         return <div className="p-5 text-center text-text3 text-[13px]">加载中...</div>;
     }
@@ -103,14 +125,29 @@ export function SettingsPage() {
                 </div>
             </div>
 
-            <div className="bg-bg-card rounded-[14px] border border-border-subtle overflow-hidden opacity-70">
+            <div className={`bg-bg-card rounded-[14px] border border-border-subtle overflow-hidden transition-opacity duration-300 ${!alerts?.enabled ? 'opacity-70' : ''}`}>
                 <div className="py-4 px-5 border-b border-border-subtle bg-white/[0.03] flex justify-between items-center">
                     <h3 className="text-sm font-semibold flex items-center gap-1.5">
                         <span className="text-red-400">⚠️</span> 关键词告警 (Bot 推送)
                     </h3>
-                    <span className="text-[10px] text-red-400 px-1.5 py-0.5 bg-red-400/10 rounded-full border border-red-400/20">已在服务端禁用</span>
+                    <button
+                        onClick={handleToggleAlerts}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${alerts?.enabled ? 'bg-accent' : 'bg-white/10'}`}
+                    >
+                        <span className="sr-only">开关告警</span>
+                        <span aria-hidden="true" className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${alerts?.enabled ? 'translate-x-1.5' : '-translate-x-1.5'}`} />
+                    </button>
                 </div>
                 <div className="p-5">
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="text-[13px] font-medium text-text-main">
+                            消息内容实时告警
+                        </div>
+                        <div className={`text-[11px] px-2 py-0.5 rounded-full border ${alerts?.enabled ? 'text-green-400 bg-green-500/10 border-green-500/20' : 'text-text3 bg-white/5 border-white/10'}`}>
+                            {alerts?.enabled ? '已开启' : '已关闭'}
+                        </div>
+                    </div>
+
                     <div className="flex flex-wrap gap-2">
                         {alerts?.keywords?.map(kw => (
                             <span key={kw} className="text-[11px] px-2.5 py-1 bg-bg-secondary text-text3 rounded-lg border border-border-subtle">
@@ -119,8 +156,9 @@ export function SettingsPage() {
                         ))}
                         {!alerts?.keywords?.length && <span className="text-[12px] text-text3">未配置告警词</span>}
                     </div>
-                    <div className="text-[11px] text-text3 mt-4">
-                        * 提示: 由于触发过于频繁，目前管理员已在配置中硬关闭了词语抓取告警。仅开启定时摘要投递。
+
+                    <div className="text-[11px] text-text3 mt-4 leading-relaxed">
+                        * 提示: 开启此功能后，包含以上关键词的群组消息将会通过 Telegram Bot 实时推送到您的私聊频道。如果触发过于频繁，建议将其关闭并仅依赖定期生成的摘要报告。
                     </div>
                 </div>
             </div>

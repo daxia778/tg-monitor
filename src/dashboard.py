@@ -72,12 +72,20 @@ async def shutdown():
 
 
 # ─── 静态文件 & 首页 ───
+# 挂载 /static （兼容旧路径）
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+# 挂载 /assets （Vite build 输出的 JS/CSS 资源路径）
+ASSETS_DIR = STATIC_DIR / "assets"
+if ASSETS_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
     return FileResponse(STATIC_DIR / "index.html")
+
+
+# NOTE: SPA fallback is registered at the BOTTOM of this file so it does not shadow API routes.
 
 
 # ═══════════════════════════════════════════
@@ -221,15 +229,42 @@ async def api_search(q: str = Query(..., min_length=1), limit: int = Query(defau
     return {"data": results, "total": len(results)}
 
 
+# 运行时告警开关覆盖（不需重启，优先级高于 config.yaml）
+_alerts_enabled_override: Optional[bool] = None
+
+
 @app.get("/api/alerts_config")
+@app.get("/api/alerts/config")
 async def api_alerts_config(db: Database = Depends(get_db)):
-    """告警配置"""
+    """获取当前告警配置（优先读数据库持久化开关）"""
     config = _config or load_config()
-    alerts = config.get("alerts", {})
+    alerts_cfg = config.get("alerts", {})
+    # 从数据库读运行时开关；若未设置则回落到 config.yaml
+    db_enabled = await db.get_setting("alerts_enabled")
+    if db_enabled is not None:
+        enabled = db_enabled.lower() == "true"
+    else:
+        enabled = alerts_cfg.get("enabled", False)
     return {
-        "enabled": alerts.get("enabled", False),
-        "keywords": alerts.get("keywords", []),
+        "enabled": enabled,
+        "keywords": alerts_cfg.get("keywords", []),
     }
+
+
+@app.post("/api/alerts/toggle")
+async def api_alerts_toggle(body: dict = Body(default={}), db: Database = Depends(get_db)):
+    """
+    运行时开关关键词告警（持久化至数据库，Collector 下次 check 生效）
+    Body: {"enabled": true/false}
+    """
+    enabled = body.get("enabled")
+    if enabled is None:
+        raise HTTPException(status_code=400, detail="缺少 enabled 字段")
+    enabled_bool = bool(enabled)
+    # 写入数据库，让 AlertManager 下次 check_message 时读取
+    await db.set_setting_bool("alerts_enabled", enabled_bool)
+    logger.info(f"🔔 告警推送已{'开启' if enabled_bool else '关闭'} (持久化至 DB)")
+    return {"ok": True, "enabled": enabled_bool}
 
 
 @app.get("/api/recent_messages")
@@ -506,6 +541,203 @@ async def api_summary_history(limit: int = Query(default=10, le=50), db: Databas
     return {"data": summaries}
 
 
+
+# ═══════════════════════════════════════════
+# Phase 4: 社交关系图谱与 KOL 挖掘 API
+# ═══════════════════════════════════════════
+
+@app.get("/api/graph/nodes")
+async def api_graph_nodes(
+    group_id: Optional[int] = Query(default=None, description="指定群组 ID，不填则跨群全局"),
+    days: int = Query(default=30, ge=1, le=180),
+    limit: int = Query(default=60, le=200),
+    db: Database = Depends(get_db)
+):
+    """
+    KOL 节点数据 — 每个节点代表一个用户
+    返回: id, name, msg_count, reply_received, forward_received, kol_score, groups
+    """
+    conn = db._core.conn
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec='seconds')
+
+    group_filter = "AND m.group_id = :gid" if group_id else ""
+    params: dict = {"since": since, "limit": limit}
+    if group_id:
+        params["gid"] = group_id
+
+    # 1. 基础发言量
+    rows = await conn.execute_fetchall(f"""
+        SELECT
+            m.sender_id,
+            m.sender_name,
+            COUNT(*)                          AS msg_count,
+            GROUP_CONCAT(DISTINCT g.title)    AS groups
+        FROM messages m
+        LEFT JOIN groups g ON g.id = m.group_id
+        WHERE m.sender_id IS NOT NULL
+          AND m.sender_name IS NOT NULL
+          AND m.date >= :since
+          {group_filter}
+        GROUP BY m.sender_id
+        ORDER BY msg_count DESC
+        LIMIT :limit
+    """, params)
+
+    if not rows:
+        return {"nodes": []}
+
+    # 2. 被回复次数（其他人 reply_to 了这个人的消息）
+    top_ids = [r["sender_id"] for r in rows]
+    placeholders = ",".join("?" * len(top_ids))
+
+    replied_map: dict = {}
+    try:
+        replied_rows = await conn.execute_fetchall(f"""
+            SELECT target.sender_id, COUNT(*) AS reply_count
+            FROM messages replier
+            JOIN messages target ON target.id = replier.reply_to_id
+                                AND target.group_id = replier.group_id
+            WHERE replier.reply_to_id IS NOT NULL
+              AND replier.date >= ?
+              AND target.sender_id IN ({placeholders})
+            GROUP BY target.sender_id
+        """, [since] + top_ids)
+        replied_map = {r["sender_id"]: r["reply_count"] for r in replied_rows}
+    except Exception:
+        pass
+
+    # 3. 被转发次数（forward_from 字段包含名字）
+    fwd_map: dict = {}
+    try:
+        fwd_rows = await conn.execute_fetchall(f"""
+            SELECT forward_from, COUNT(*) AS fwd_count
+            FROM messages
+            WHERE forward_from IS NOT NULL
+              AND date >= ?
+              {group_filter}
+            GROUP BY forward_from
+        """, [since] + ([group_id] if group_id else []))
+        fwd_map = {r["forward_from"]: r["fwd_count"] for r in fwd_rows}
+    except Exception:
+        pass
+
+    # 4. 合并计算 KOL 综合得分
+    nodes = []
+    for r in rows:
+        sid = r["sender_id"]
+        name = r["sender_name"] or f"User#{sid}"
+        msg_count = r["msg_count"]
+        reply_recv = replied_map.get(sid, 0)
+        fwd_recv = fwd_map.get(name, 0)
+        # 权重: 发言权重低，被回复/转发权重高（代表真影响力）
+        kol_score = round(msg_count * 1.0 + reply_recv * 3.0 + fwd_recv * 2.0, 1)
+        nodes.append({
+            "id": sid,
+            "name": name,
+            "msg_count": msg_count,
+            "reply_received": reply_recv,
+            "forward_received": fwd_recv,
+            "kol_score": kol_score,
+            "groups": r["groups"] or "",
+        })
+
+    nodes.sort(key=lambda x: x["kol_score"], reverse=True)
+    return {"nodes": nodes, "total": len(nodes)}
+
+
+@app.get("/api/graph/edges")
+async def api_graph_edges(
+    group_id: Optional[int] = Query(default=None),
+    days: int = Query(default=30, ge=1, le=180),
+    min_weight: int = Query(default=2, description="最少互动次数才建边"),
+    db: Database = Depends(get_db)
+):
+    """
+    互动关系边数据（有向加权图）
+    每条边: source(sender), target(被回复者), weight(回复次数)
+    """
+    conn = db._core.conn
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec='seconds')
+    group_filter = "AND replier.group_id = ?" if group_id else ""
+    params = [since, min_weight] + ([group_id] if group_id else [])
+
+    try:
+        rows = await conn.execute_fetchall(f"""
+            SELECT
+                replier.sender_id   AS source_id,
+                replier.sender_name AS source_name,
+                target.sender_id    AS target_id,
+                target.sender_name  AS target_name,
+                COUNT(*)            AS weight
+            FROM messages replier
+            JOIN messages target ON target.id = replier.reply_to_id
+                                AND target.group_id = replier.group_id
+            WHERE replier.reply_to_id IS NOT NULL
+              AND replier.sender_id IS NOT NULL
+              AND target.sender_id IS NOT NULL
+              AND replier.sender_id != target.sender_id
+              AND replier.date >= ?
+              {group_filter}
+            GROUP BY replier.sender_id, target.sender_id
+            HAVING COUNT(*) >= ?
+            ORDER BY weight DESC
+            LIMIT 300
+        """, params)
+    except Exception as e:
+        logger.warning(f"graph/edges query failed: {e}")
+        return {"edges": []}
+
+    edges = [{
+        "source": r["source_id"],
+        "source_name": r["source_name"],
+        "target": r["target_id"],
+        "target_name": r["target_name"],
+        "weight": r["weight"],
+    } for r in rows]
+
+    return {"edges": edges}
+
+
+@app.get("/api/graph/heatmap")
+async def api_graph_heatmap(
+    group_id: Optional[int] = Query(default=None),
+    days: int = Query(default=60, ge=7, le=365),
+    db: Database = Depends(get_db)
+):
+    """
+    活跃时区热力矩阵 7×24 — (weekday, hour) → message_count
+    weekday: 0=Mon…6=Sun, hour: 0–23
+    """
+    conn = db._core.conn
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec='seconds')
+    group_filter = "AND group_id = ?" if group_id else ""
+    params = [since] + ([group_id] if group_id else [])
+
+    try:
+        rows = await conn.execute_fetchall(f"""
+            SELECT
+                CAST(strftime('%w', date) AS INTEGER)  AS weekday_sun,
+                CAST(strftime('%H', date) AS INTEGER)  AS hour,
+                COUNT(*)                               AS count
+            FROM messages
+            WHERE date >= ?
+              {group_filter}
+            GROUP BY weekday_sun, hour
+        """, params)
+    except Exception as e:
+        logger.warning(f"graph/heatmap query failed: {e}")
+        return {"matrix": []}
+
+    # strftime('%w') returns 0=Sun..6=Sat, remap to 0=Mon..6=Sun
+    matrix = []
+    for r in rows:
+        wd_sun = r["weekday_sun"]
+        wd_mon = (wd_sun - 1) % 7  # 0=Mon
+        matrix.append({"weekday": wd_mon, "hour": r["hour"], "count": r["count"]})
+
+    return {"matrix": matrix, "days": days}
+
+
 # ═══════════════════════════════════════════
 # Phase 3: 多租户 Auth Portal API
 # ═══════════════════════════════════════════
@@ -654,6 +886,15 @@ async def api_activate_tenant(tenant_id: int, db: Database = Depends(get_db)):
     """重新启用租户账号"""
     await db.set_tenant_active(tenant_id, True)
     return {"ok": True, "message": f"租户 #{tenant_id} 已启用"}
+
+
+# ─── SPA Fallback ───
+# 必须放在所有 API 路由之后，让所有未命中的路径返回 index.html
+@app.get("/{full_path:path}", response_class=HTMLResponse)
+async def spa_fallback(full_path: str):
+    """让 React Router 的前端路由不 404（SPA 通配回退）"""
+    # assets / static / api 走各自的挂载，不应到这里
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 def run_dashboard(config_path=None, host="0.0.0.0", port=8501):

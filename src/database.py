@@ -11,6 +11,7 @@ from .db.analytics import AnalyticsDAO
 from .db.groups import GroupsDAO
 from .db.alerts import AlertsDAO
 from .db.tenants import TenantsDAO
+from .db.settings import SettingsDAO
 
 class Database:
     """异步 SQLite 数据库管理器门面"""
@@ -23,6 +24,7 @@ class Database:
         self.groups: Optional[GroupsDAO] = None
         self.alerts: Optional[AlertsDAO] = None
         self.tenants: Optional[TenantsDAO] = None
+        self.settings_dao: Optional[SettingsDAO] = None
 
     async def connect(self):
         """连接数据库并初始化"""
@@ -35,6 +37,7 @@ class Database:
         self.groups = GroupsDAO(conn)
         self.alerts = AlertsDAO(conn)
         self.tenants = TenantsDAO(conn)
+        self.settings_dao = SettingsDAO(conn)
 
     async def close(self):
         await self._core.close()
@@ -48,6 +51,19 @@ class Database:
 
     async def set_tenant_active(self, tenant_id: int, is_active: bool):
         return await self.tenants.set_tenant_active(tenant_id, is_active)
+
+    # ─── 设置 KV (SettingsDAO) ───
+    async def get_setting(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        return await self.settings_dao.get(key, default)
+
+    async def get_setting_bool(self, key: str, default: bool = False) -> bool:
+        return await self.settings_dao.get_bool(key, default)
+
+    async def set_setting(self, key: str, value: str):
+        return await self.settings_dao.set(key, value)
+
+    async def set_setting_bool(self, key: str, value: bool):
+        return await self.settings_dao.set_bool(key, value)
 
     # ─── 群组操作 (GroupsDAO) ───
     async def upsert_group(self, group_id: int, title: str, username: Optional[str] = None, member_count: Optional[int] = None):

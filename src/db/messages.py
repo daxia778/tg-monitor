@@ -309,7 +309,7 @@ class MessagesDAO:
         try:
             while True:
                 cursor = await self.conn.execute(
-                    "DELETE FROM links WHERE id IN (SELECT id FROM links WHERE discovered_at < ? LIMIT 5000)", 
+                    "DELETE FROM links WHERE id IN (SELECT id FROM links WHERE discovered_at < ? AND tags IS NULL LIMIT 5000)", 
                     (cutoff,)
                 )
                 await self.conn.commit()

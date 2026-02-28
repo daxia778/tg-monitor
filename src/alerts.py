@@ -73,8 +73,19 @@ class AlertManager:
         """
         检查消息是否命中关键词。
         如果命中，发送告警并返回匹配的关键词；否则返回 None。
+        优先读数据库中的 alerts_enabled 设置（运行时可动态切换）。
         """
-        if not self.enabled or not self._patterns:
+        # 动态读取数据库开关（如果有 db 引用）
+        enabled = self.enabled
+        if self.db is not None:
+            try:
+                db_val = await self.db.get_setting("alerts_enabled")
+                if db_val is not None:
+                    enabled = db_val.lower() == "true"
+            except Exception:
+                pass  # 读取失败时回落到 config.yaml 的值
+
+        if not enabled or not self._patterns:
             return None
 
         text = msg.get("text") or ""
