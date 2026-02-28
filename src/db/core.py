@@ -41,7 +41,10 @@ CREATE TABLE IF NOT EXISTS links (
     group_id     INTEGER NOT NULL,
     sender_name  TEXT,
     context      TEXT,
-    discovered_at TEXT NOT NULL
+    discovered_at TEXT NOT NULL,
+    title        TEXT,
+    description  TEXT,
+    image_url    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS summaries (
@@ -128,6 +131,21 @@ MIGRATIONS: List[Tuple[int, str, str]] = [
             msg_key    TEXT PRIMARY KEY,
             alerted_at TEXT NOT NULL DEFAULT (datetime('now'))
         )""",
+    ),
+    (
+        2,
+        "Add title to links",
+        "ALTER TABLE links ADD COLUMN title TEXT",
+    ),
+    (
+        3,
+        "Add description to links",
+        "ALTER TABLE links ADD COLUMN description TEXT",
+    ),
+    (
+        4,
+        "Add image_url to links",
+        "ALTER TABLE links ADD COLUMN image_url TEXT",
     ),
 ]
 

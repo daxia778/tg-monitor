@@ -1,32 +1,70 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-primary: #0a0a0a;
-  --color-bg-secondary: #0f1117;
-  --color-bg-card: rgba(15, 17, 23, 0.85);
-  --color-bg-sidebar: rgba(10, 10, 10, 0.6);
-  --color-bg-hover: rgba(88, 166, 255, 0.08);
-  --color-accent: #58a6ff;
-  --color-accent2: #79c0ff;
-  --color-accent3: #8b949e;
-  --color-accent4: #39c5bb;
-  --color-accent5: #d29922;
-  --color-accent6: #e5534b;
-  --color-text-main: #e6edf3;
-  --color-text2: #8b949e;
-  --color-text3: #6e7681;
+  /* Apple / Vercel Premium Black + Grid */
+  --color-bg-primary: #000000;
+  --color-bg-secondary: #0a0a0a;
+  --color-bg-card: rgba(10, 10, 10, 0.55);
+  --color-bg-sidebar: rgba(0, 0, 0, 0.65);
+  --color-bg-hover: rgba(255, 255, 255, 0.06);
+  --color-accent: #ffffff;
+  --color-accent2: #a1a1aa;
+  --color-accent3: #52525b;
+  --color-accent4: #0ea5e9;
+  /* Command Center cyan */
+  --color-accent5: #8b5cf6;
+  /* AI vibe purple */
+  --color-accent6: #ef4444;
+  --color-text-main: #f4f4f5;
+  --color-text2: #a1a1aa;
+  --color-text3: #52525b;
   --color-border-subtle: rgba(255, 255, 255, 0.08);
-  --color-glass: rgba(255, 255, 255, 0.04);
+  --color-glass: rgba(255, 255, 255, 0.02);
 }
 
 @layer base {
   body {
     @apply bg-bg-primary text-text-main;
-    font-family: 'Inter', -apple-system, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+    /* Vercel-style Premium Black Grid, thickened */
+    background-color: #000000;
     background-image:
-      linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-    background-size: 36px 36px;
+      linear-gradient(to right, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    background-size: 32px 32px;
+    background-position: center center;
+    background-attachment: fixed;
     min-height: 100vh;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-bg-card backdrop-blur-3xl border shadow-xl;
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .shimmer-bg {
+    background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.03) 50%,
+        transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmer 2.5s infinite linear;
+  }
+
+  .glow-ai {
+    box-shadow: 0 0 24px rgba(139, 92, 246, 0.3);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
   }
 }

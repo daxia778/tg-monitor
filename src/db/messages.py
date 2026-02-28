@@ -3,6 +3,8 @@ import re
 from typing import Optional, List, Any
 import logging
 from datetime import datetime, timezone, timedelta
+from bs4 import BeautifulSoup
+import httpx
 
 logger = logging.getLogger("tg-monitor.db.messages")
 
@@ -13,6 +15,73 @@ URL_PATTERN = re.compile(
 class MessagesDAO:
     def __init__(self, conn):
         self.conn = conn
+        self.link_queue = asyncio.Queue()
+        self._link_worker_task = asyncio.create_task(self._link_parser_worker())
+
+    async def _link_parser_worker(self):
+        async with httpx.AsyncClient(timeout=10.0, verify=False, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}) as client:
+            while True:
+                try:
+                    url, msg_id, group_id = await self.link_queue.get()
+                    await self._parse_and_update_link(client, url, msg_id, group_id)
+                    self.link_queue.task_done()
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error(f"Link parser worker error: {e}")
+                    await asyncio.sleep(1)
+
+    async def _parse_and_update_link(self, client: httpx.AsyncClient, url: str, msg_id: int, group_id: int):
+        try:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                return
+            soup = BeautifulSoup(resp.text, 'lxml')
+            
+            title_tag = soup.find('title')
+            title = title_tag.text.strip() if title_tag else None
+            
+            desc_tag = soup.find('meta', attrs={'name': 'description'}) or soup.find('meta', attrs={'property': 'og:description'})
+            description = desc_tag['content'].strip() if desc_tag and desc_tag.has_attr('content') else None
+            
+            img_tag = soup.find('meta', attrs={'property': 'og:image'}) or soup.find('meta', attrs={'name': 'twitter:image'})
+            image_url = img_tag['content'].strip() if img_tag and img_tag.has_attr('content') else None
+
+            tag = None
+            if title or description or image_url:
+                import os
+                ai_url = os.getenv("AI_API_URL", "http://localhost:18789/v1/chat/completions")
+                ai_key = os.getenv("AI_API_KEY", "")
+                ai_model = os.getenv("AI_MODEL", "gpt-4o")
+                payload = {
+                    "model": ai_model,
+                    "messages": [
+                        {"role": "system", "content": "You are a web link classifier. Classify the link metadata into ONE exact category from the following: [干货评测, 促销/羊毛, 文档资源, 无价值广告, 其他]. Output ONLY the exact label name."},
+                        {"role": "user", "content": f"URL: {url}\nTitle: {title or 'N/A'}\nDescription: {description or 'N/A'}"}
+                    ],
+                    "temperature": 0.1
+                }
+                try:
+                    headers = {}
+                    if ai_key:
+                        headers["Authorization"] = f"Bearer {ai_key}"
+                    resp_ai = await client.post(ai_url, json=payload, headers=headers, timeout=10.0)
+                    if resp_ai.status_code == 200:
+                        tag = resp_ai.json()["choices"][0]["message"]["content"].strip()
+                        logger.debug(f"🏷️ AI Tag for {url}: {tag}")
+                except Exception as e:
+                    logger.debug(f"⚠️ AI tag failed for {url}: {e}")
+
+                await self.conn.execute(
+                    "UPDATE links SET title = ?, description = ?, image_url = ?, tags = ? WHERE url = ? AND message_id = ? AND group_id = ?",
+                    (title, description, image_url, tag, url, msg_id, group_id)
+                )
+                await self.conn.commit()
+                logger.debug(f"✅ Fetched metadata for {url}: {title}")
+        except httpx.TimeoutException:
+            logger.debug(f"⚠️ Timeout fetching metadata for {url}")
+        except Exception as e:
+            logger.debug(f"⚠️ Failed to parse metadata for {url}: {e}")
 
     async def insert_message(self, msg: dict):
         try:
@@ -42,6 +111,7 @@ class MessagesDAO:
                             msg["date"],
                         ),
                     )
+                    self.link_queue.put_nowait((url, msg["id"], msg["group_id"]))
             await self.conn.commit()
         except Exception as e:
             logger.error(
@@ -80,6 +150,7 @@ class MessagesDAO:
                                 msg["date"],
                             ),
                         )
+                        self.link_queue.put_nowait((url, msg["id"], msg["group_id"]))
             await self.conn.commit()
             logger.info(f"✅ 批量插入 {len(messages)} 条消息")
         except Exception as e:

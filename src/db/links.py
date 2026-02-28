@@ -56,7 +56,11 @@ class LinksDAO:
                   GROUP_CONCAT(DISTINCT g.title) as group_titles,
                   GROUP_CONCAT(DISTINCT l.sender_name) as sender_names,
                   MIN(l.discovered_at) as first_seen,
-                  MAX(l.discovered_at) as last_seen
+                  MAX(l.discovered_at) as last_seen,
+                  MAX(l.title) as title,
+                  MAX(l.description) as description,
+                  MAX(l.image_url) as image_url,
+                  MAX(l.tags) as tags
                FROM links l
                LEFT JOIN groups g ON l.group_id = g.id
                WHERE {where}

@@ -189,7 +189,7 @@ async def api_links(limit: int = Query(default=30), db: Database = Depends(get_d
         ["t.me", "telegram.me", "telegram.org", "telegra.ph", "telegram.dog"]
     )
     
-    links = await db.get_links(limit=limit, block_domains=block_domains)
+    links = await db.get_links_aggregated(limit=limit, block_domains=block_domains)
     return {"data": links}
 
 
