@@ -107,6 +107,12 @@ WHEN new.text IS NOT old.text BEGIN
     VALUES (new.rowid, new.text, new.sender_name);
 END"""
 
+# FTS5 DELETE 触发器：消息删除时同步清除全文索引
+FTS_TRIGGER_DELETE_SQL = """CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, text, sender_name)
+    VALUES ('delete', old.rowid, old.text, old.sender_name);
+END"""
+
 # ─── P1#8: 增量迁移系统 ─────────────────────────────────────────────────
 # 每个元素为 (version: int, description: str, sql: str)
 # version 必须单调递增、不得修改已经发布的 version。
@@ -187,6 +193,7 @@ class Database:
             await self._db.execute(FTS_CREATE_SQL)
             await self._db.execute(FTS_TRIGGER_SQL)
             await self._db.execute(FTS_TRIGGER_UPDATE_SQL)
+            await self._db.execute(FTS_TRIGGER_DELETE_SQL)
             await self._db.commit()
             # 检查是否需要重建索引（首次创建 FTS 表时）
             cursor = await self._db.execute(
@@ -924,26 +931,41 @@ class Database:
     ) -> int:
         """
         清理超期消息（默认保留 90 天）。
-        同步清理关联的 links 记录。
+        分批清理以避免数据库长时间锁死。
         返回删除条数。
         """
         cutoff = (datetime.now(timezone.utc) - timedelta(days=keep_days)).isoformat(timespec='seconds')
+        total_deleted_links = 0
+        total_deleted_msgs = 0
         try:
-            # 先清理 links（外键依赖 messages.id）
-            await self._db.execute(
-                "DELETE FROM links WHERE discovered_at < ?", (cutoff,)
-            )
-            cursor = await self._db.execute(
-                "DELETE FROM messages WHERE date < ?", (cutoff,)
-            )
-            # FTS 内容表在 content= 模式下随物理表删除，重建一次即可
-            await self._db.execute(
-                "INSERT INTO messages_fts(messages_fts) VALUES('rebuild')"
-            )
-            await self._db.commit()
-            deleted = cursor.rowcount
-            logger.info(f"🧹 清理超期消息: {deleted} 条 (cutoff={cutoff[:10]})")
-            return deleted
+            # 分批清理 links
+            while True:
+                cursor = await self._db.execute(
+                    "DELETE FROM links WHERE id IN (SELECT id FROM links WHERE discovered_at < ? LIMIT 5000)", 
+                    (cutoff,)
+                )
+                await self._db.commit()
+                deleted = cursor.rowcount
+                total_deleted_links += deleted
+                if deleted < 5000:
+                    break
+                await asyncio.sleep(0.1)  # 释放控制权，降低锁争用
+
+            # 分批清理 messages
+            while True:
+                cursor = await self._db.execute(
+                    "DELETE FROM messages WHERE rowid IN (SELECT rowid FROM messages WHERE date < ? LIMIT 5000)", 
+                    (cutoff,)
+                )
+                await self._db.commit()
+                deleted = cursor.rowcount
+                total_deleted_msgs += deleted
+                if deleted < 5000:
+                    break
+                await asyncio.sleep(0.1)
+
+            logger.info(f"🧹 清理超期数据: {total_deleted_msgs} 条消息, {total_deleted_links} 条链接 (cutoff={cutoff[:10]})")
+            return total_deleted_msgs
         except Exception as e:
-            logger.error(f"❌ 清理消息失败: {e}")
-            return 0
+            logger.error(f"❌ 分批清理老数据失败: {e}")
+            return total_deleted_msgs
