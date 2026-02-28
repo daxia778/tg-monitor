@@ -65,10 +65,31 @@ async def index():
 
 @app.get("/api/health")
 async def api_health():
-    """健康检查"""
-    db = await get_db()
-    total = await db.get_message_count()
-    return {"status": "ok", "messages": total, "version": "2.0.0"}
+    """健康检查 (增强版)"""
+    try:
+        db = await get_db()
+        total = await db.get_message_count()
+        groups = await db.get_groups()
+        
+        # 获取数据库文件大小
+        db_path = Path(_config["database"]["path"]) if _config else Path("data/tg_monitor.db")
+        db_size_mb = round(db_path.stat().st_size / (1024 * 1024), 2) if db_path.exists() else 0
+        
+        # 获取最新的消息时间
+        recent = await db.get_recent_messages(limit=1)
+        last_sync = recent[0]["date"] if recent else "never"
+        
+        return {
+            "status": "ok", 
+            "messages": total, 
+            "groups": len(groups),
+            "db_size_mb": db_size_mb,
+            "last_sync": last_sync,
+            "version": "2.0.1"
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {"status": "error", "detail": str(e)}
 
 
 @app.get("/api/overview")

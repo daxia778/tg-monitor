@@ -787,17 +787,17 @@
             <h1>TG Monitor</h1>
         </div>
         <nav class="sidebar-nav">
-            <div class="nav-item active" onclick="showPage('overview')"><span class="icon">📊</span>概览</div>
-            <div class="nav-item" onclick="showPage('messages')"><span class="icon">💬</span>消息流</div>
-            <div class="nav-item" onclick="showPage('groups')"><span class="icon">📌</span>群组</div>
-            <div class="nav-item" onclick="showPage('search')"><span class="icon">🔍</span>搜索</div>
+            <div class="nav-item active" data-action="page" data-page="overview"><span class="icon">📊</span>概览</div>
+            <div class="nav-item" data-action="page" data-page="messages"><span class="icon">💬</span>消息流</div>
+            <div class="nav-item" data-action="page" data-page="groups"><span class="icon">📌</span>群组</div>
+            <div class="nav-item" data-action="page" data-page="search"><span class="icon">🔍</span>搜索</div>
             <div class="nav-divider"></div>
-            <div class="nav-item" onclick="showPage('links')"><span class="icon">🔗</span>链接</div>
-            <div class="nav-item" onclick="showPage('alerts')"><span class="icon">🚨</span>告警</div>
-            <div class="nav-item" onclick="showPage('heatmap')"><span class="icon">🗓️</span>热力图</div>
-            <div class="nav-item" onclick="showPage('summary')"><span class="icon">📝</span>AI 摘要</div>
+            <div class="nav-item" data-action="page" data-page="links"><span class="icon">🔗</span>链接</div>
+            <div class="nav-item" data-action="page" data-page="alerts"><span class="icon">🚨</span>告警</div>
+            <div class="nav-item" data-action="page" data-page="heatmap"><span class="icon">🗓️</span>热力图</div>
+            <div class="nav-item" data-action="page" data-page="summary"><span class="icon">📝</span>AI 摘要</div>
             <div class="nav-divider"></div>
-            <div class="nav-item" onclick="exportCSV()"><span class="icon">📥</span>导出 CSV</div>
+            <div class="nav-item" data-action="export"><span class="icon">📥</span>导出 CSV</div>
         </nav>
         <div class="sidebar-footer">
             <div style="font-size:11px;color:var(--text3);margin-bottom:6px" id="sidebar-stats">⏳ 加载中...</div>
@@ -812,8 +812,8 @@
         <div class="topbar">
             <h2 id="page-title">📊 概览</h2>
             <div class="topbar-actions">
-                <button class="btn" onclick="refreshAll()">🔄 刷新</button>
-                <button class="btn btn-accent" id="auto-refresh-btn" onclick="toggleAutoRefresh()">⏱ 自动刷新: 开</button>
+                <button class="btn" data-action="refresh">🔄 刷新</button>
+                <button class="btn btn-accent" id="auto-refresh-btn" data-action="toggle-auto-refresh">⏱ 自动刷新: 开</button>
             </div>
         </div>
         <div class="content">
@@ -852,9 +852,9 @@
                         <div class="card-h">
                             <h3>📈 消息趋势</h3>
                             <div class="time-sel">
-                                <button class="t-btn" onclick="loadTrends(24)" data-h="24">24h</button>
-                                <button class="t-btn on" onclick="loadTrends(72)" data-h="72">3天</button>
-                                <button class="t-btn" onclick="loadTrends(168)" data-h="168">7天</button>
+                                <button class="t-btn" data-action="trend"  data-h="24">24h</button>
+                                <button class="t-btn on" data-action="trend"  data-h="72">3天</button>
+                                <button class="t-btn" data-action="trend"  data-h="168">7天</button>
                             </div>
                         </div>
                         <div class="card-b"><canvas id="trendChart" height="220"></canvas></div>
@@ -921,7 +921,7 @@
                     </div>
                 </div>
                 <div id="group-detail" style="display:none">
-                    <div class="back-btn" onclick="closeGroupDetail()">← 返回群组列表</div>
+                    <div class="back-btn" data-action=\"close-group\">← 返回群组列表</div>
                     <div id="gd-header"></div>
                     <div class="grid-2" style="margin-bottom:20px">
                         <div class="card">
@@ -958,7 +958,7 @@
                         <div class="search-bar">
                             <input type="text" class="search-input" id="searchInput" placeholder="输入关键词搜索消息..."
                                 onkeydown="if(event.key==='Enter')doSearch()">
-                            <button class="search-btn" onclick="doSearch()">搜索</button>
+                            <button class="search-btn" data-action=\"do-search\">搜索</button>
                         </div>
                         <div class="msg-list" id="search-results">
                             <div style="color:var(--text3);font-size:12px;text-align:center;padding:30px">输入关键词开始搜索
@@ -1047,13 +1047,13 @@
                         <div style="margin-bottom:14px">
                             <div style="font-size:12px;color:var(--text3);margin-bottom:8px">时间范围</div>
                             <div class="time-sel" id="sum-time-sel">
-                                <button class="t-btn" onclick="setSumHours(1)" data-h="1">1h</button>
-                                <button class="t-btn" onclick="setSumHours(3)" data-h="3">3h</button>
-                                <button class="t-btn" onclick="setSumHours(6)" data-h="6">6h</button>
-                                <button class="t-btn on" onclick="setSumHours(12)" data-h="12">12h</button>
-                                <button class="t-btn" onclick="setSumHours(24)" data-h="24">24h</button>
-                                <button class="t-btn" onclick="setSumHours(72)" data-h="72">3天</button>
-                                <button class="t-btn" onclick="setSumHours(168)" data-h="168">7天</button>
+                                <button class="t-btn" data-action=\"set-sum-hours\" data-h=\"1\" data-h="1">1h</button>
+                                <button class="t-btn" data-action=\"set-sum-hours\" data-h=\"3\" data-h="3">3h</button>
+                                <button class="t-btn" data-action=\"set-sum-hours\" data-h=\"6\" data-h="6">6h</button>
+                                <button class="t-btn on" data-action=\"set-sum-hours\" data-h=\"12\" data-h="12">12h</button>
+                                <button class="t-btn" data-action=\"set-sum-hours\" data-h=\"24\" data-h="24">24h</button>
+                                <button class="t-btn" data-action=\"set-sum-hours\" data-h=\"72\" data-h="72">3天</button>
+                                <button class="t-btn" data-action=\"set-sum-hours\" data-h=\"168\" data-h="168">7天</button>
                             </div>
                         </div>
                         <div style="margin-bottom:18px">
@@ -1070,7 +1070,7 @@
                             </div>
                         </div>
                         <div style="display:flex;align-items:center;gap:12px">
-                            <button class="btn btn-accent" id="sum-gen-btn" onclick="generateSummary()"
+                            <button class="btn btn-accent" id="sum-gen-btn" data-action=\"gen-summary\"
                                 style="padding:10px 28px;font-size:14px">🧠 一键生成摘要</button>
                             <span id="sum-msg-count" style="font-size:12px;color:var(--text3)"></span>
                         </div>
@@ -1110,7 +1110,7 @@
                 <div class="card">
                     <div class="card-h">
                         <h3>📜 历史摘要</h3>
-                        <button class="btn" onclick="loadSummaryHistory()"
+                        <button class="btn" data-action=\"load-sum-hist\"
                             style="font-size:11px;padding:4px 10px">刷新</button>
                     </div>
                     <div class="card-b" id="sum-history" style="max-height:400px;overflow-y:auto">
@@ -1220,7 +1220,7 @@
                 const r = await fetch('/api/groups?hours=24'); const d = await r.json(); const el = document.getElementById('ov-groups');
                 if (!d.data.length) { el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:20px">暂无数据</div>'; return }
                 const mx = Math.max(...d.data.map(g => g.message_count));
-                el.innerHTML = d.data.map(g => `<div class="grp" onclick="openGroupDetail(${g.group_id})"><div><div class="grp-name">${E(g.title || '群组' + g.group_id)}</div><div class="grp-bar"><div class="grp-bar-fill" style="width:${(g.message_count / mx * 100).toFixed(1)}%"></div></div></div><div style="text-align:right"><div class="grp-cnt">${g.message_count}</div><div class="grp-sub">${g.active_users} 人</div></div></div>`).join('');
+                el.innerHTML = d.data.map(g => `<div class="grp" data-action=\"open-group\" data-gid=\"${g.group_id}\"><div><div class="grp-name">${E(g.title || '群组' + g.group_id)}</div><div class="grp-bar"><div class="grp-bar-fill" style="width:${(g.message_count / mx * 100).toFixed(1)}%"></div></div></div><div style="text-align:right"><div class="grp-cnt">${g.message_count}</div><div class="grp-sub">${g.active_users} 人</div></div></div>`).join('');
             } catch (e) { console.error(e) }
         }
 
@@ -1254,7 +1254,7 @@
                 const r = await fetch('/api/groups?hours=24'); const d = await r.json();
                 if (!d.data.length) { el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:20px">暂无群组</div>'; return }
                 const mx = Math.max(...d.data.map(g => g.message_count));
-                el.innerHTML = d.data.map(g => `<div class="grp" onclick="openGroupDetail(${g.group_id})"><div><div class="grp-name">${E(g.title || '群组' + g.group_id)}</div><div class="grp-bar"><div class="grp-bar-fill" style="width:${(g.message_count / mx * 100).toFixed(1)}%"></div></div></div><div style="text-align:right"><div class="grp-cnt">${g.message_count}</div><div class="grp-sub">${g.active_users} 人</div></div></div>`).join('');
+                el.innerHTML = d.data.map(g => `<div class="grp" data-action=\"open-group\" data-gid=\"${g.group_id}\"><div><div class="grp-name">${E(g.title || '群组' + g.group_id)}</div><div class="grp-bar"><div class="grp-bar-fill" style="width:${(g.message_count / mx * 100).toFixed(1)}%"></div></div></div><div style="text-align:right"><div class="grp-cnt">${g.message_count}</div><div class="grp-sub">${g.active_users} 人</div></div></div>`).join('');
             } catch (e) { console.error(e) }
         }
 
@@ -1316,7 +1316,7 @@
                 const r1 = await fetch('/api/alerts_config'); const d1 = await r1.json();
                 const el = document.getElementById('alert-cfg');
                 const st = d1.enabled ? '<span style="color:var(--accent4)">● 已启用</span>' : '<span style="color:var(--text3)">○ 未启用</span>';
-                el.innerHTML = st + '<div class="kw-tags" style="margin-top:12px">' + d1.keywords.map(k => `<span class="kw-tag" onclick="document.getElementById('searchInput').value='${E(k)}';showPage('search');doSearch()">${E(k)}</span>`).join('') + '</div>';
+                el.innerHTML = st + '<div class="kw-tags" style="margin-top:12px">' + d1.keywords.map(k => `<span class="kw-tag" data-action=\"tag-search\" data-tag=\"${E(k)}\">${E(k)}</span>`).join('') + '</div>';
                 // 含告警的消息
                 const r2 = await fetch('/api/recent_messages?limit=200'); const d2 = await r2.json();
                 const alertMsgs = d2.data.filter(m => (m.alert_keywords || []).length > 0);
@@ -1511,7 +1511,7 @@
                     const cnt = s.message_count || 0;
                     const preview = (s.content || '').slice(0, 120).replace(/\n/g, ' ');
                     const id = 'hist-' + Math.random().toString(36).slice(2, 7);
-                    return `<div style="border-bottom:1px solid var(--border);padding:12px 0" onclick="document.getElementById('${id}').style.display=document.getElementById('${id}').style.display==='none'?'':'none'" style="cursor:pointer">
+                    return `<div style="border-bottom:1px solid var(--border);padding:12px 0" data-action=\"toggle-hist\" data-target=\"${id}\" style="cursor:pointer">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;cursor:pointer">
                             <span style="font-size:13px;font-weight:600">📌 ${E(group)}</span>
                             <span style="font-size:11px;color:var(--text3)">${start} → ${end}</span>
