@@ -267,6 +267,33 @@ async def api_alerts_toggle(body: dict = Body(default={}), db: Database = Depend
     return {"ok": True, "enabled": enabled_bool}
 
 
+@app.get("/api/settings/retention")
+async def api_get_retention(db: Database = Depends(get_db)):
+    """获取数据保留策略"""
+    val = await db.get_setting("retention_days")
+    if val is not None:
+        try:
+            days = int(val)
+        except ValueError:
+            config = _config or load_config()
+            days = config.get("monitoring", {}).get("keep_days", 90)
+    else:
+        config = _config or load_config()
+        days = config.get("monitoring", {}).get("keep_days", 90)
+    return {"retention_days": days}
+
+
+@app.post("/api/settings/retention")
+async def api_set_retention(body: dict = Body(...), db: Database = Depends(get_db)):
+    """修改数据保留策略"""
+    days = body.get("retention_days")
+    if type(days) is not int or days < 1:
+        raise HTTPException(status_code=400, detail="retention_days 必须是大于 0 的整数")
+    await db.set_setting("retention_days", str(days))
+    logger.info(f"💾 数据保留策略已更新为 {days} 天")
+    return {"ok": True, "retention_days": days}
+
+
 @app.get("/api/recent_messages")
 async def api_recent_messages(
     limit: int = Query(default=100, le=500),

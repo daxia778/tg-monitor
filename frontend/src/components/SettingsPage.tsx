@@ -16,16 +16,22 @@ type LLMStatus = {
 export function SettingsPage() {
     const [alerts, setAlerts] = useState<AlertsConfig | null>(null);
     const [llm, setLlm] = useState<LLMStatus | null>(null);
+    const [retentionDays, setRetentionDays] = useState<number>(90);
+    const [isSavingRetention, setIsSavingRetention] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         Promise.all([
             fetch('/api/alerts/config').then(r => r.json()),
             fetch('/api/llm/status').then(r => r.json()),
+            fetch('/api/settings/retention').then(r => r.json()),
         ])
-            .then(([alertsData, llmData]) => {
+            .then(([alertsData, llmData, retentionData]) => {
                 setAlerts(alertsData);
                 setLlm(llmData);
+                if (retentionData?.retention_days) {
+                    setRetentionDays(retentionData.retention_days);
+                }
             })
             .catch(console.error)
             .finally(() => setIsLoading(false));
@@ -50,6 +56,28 @@ export function SettingsPage() {
         } catch (error) {
             console.error(error);
             alert('网络错误，无法连接后端');
+        }
+    };
+
+    const handleSaveRetention = async () => {
+        setIsSavingRetention(true);
+        try {
+            const res = await fetch('/api/settings/retention', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ retention_days: retentionDays }),
+            });
+            const data = await res.json();
+            if (res.ok && data.ok) {
+                alert('数据保留策略已保存');
+            } else {
+                alert(data.detail || '保存失败');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('网络错误，无法连接后端');
+        } finally {
+            setIsSavingRetention(false);
         }
     };
 
@@ -159,6 +187,44 @@ export function SettingsPage() {
 
                     <div className="text-[11px] text-text3 mt-4 leading-relaxed">
                         * 提示: 开启此功能后，包含以上关键词的群组消息将会通过 Telegram Bot 实时推送到您的私聊频道。如果触发过于频繁，建议将其关闭并仅依赖定期生成的摘要报告。
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-bg-card rounded-[14px] border border-border-subtle overflow-hidden">
+                <div className="py-4 px-5 border-b border-border-subtle bg-white/[0.03]">
+                    <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                        <span className="text-blue-400">🛡️</span> 数据保留与瘦身策略
+                    </h3>
+                </div>
+                <div className="p-5 space-y-4">
+                    <div className="flex justify-between items-center py-2">
+                        <div className="flex-1">
+                            <div className="text-[13px] font-medium text-text-main">
+                                消息历史保留天数
+                            </div>
+                            <div className="text-[11px] text-text3 mt-1 leading-relaxed max-w-lg">
+                                * 系统将在后台定期自动清理超期数据。高阶元数据（如 AI 生成的总结和包含特征标签的干货链接）不受此约束，长久保留。
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 ml-4">
+                            <input
+                                type="number"
+                                min="1"
+                                max="3650"
+                                value={retentionDays}
+                                onChange={(e) => setRetentionDays(parseInt(e.target.value) || 90)}
+                                className="w-20 px-3 py-1.5 bg-bg-secondary border border-border-subtle rounded-lg text-[13px] text-text-main focus:outline-none focus:border-accent"
+                            />
+                            <span className="text-[13px] text-text2">天</span>
+                            <button
+                                onClick={handleSaveRetention}
+                                disabled={isSavingRetention}
+                                className="ml-2 px-3 py-1.5 bg-accent/10 text-accent border border-accent/20 rounded-lg text-[13px] font-medium hover:bg-accent hover:text-white transition-colors disabled:opacity-50"
+                            >
+                                {isSavingRetention ? '...' : '保存'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

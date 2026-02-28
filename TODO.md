@@ -72,12 +72,12 @@
 ### Phase 5: 🛡️ 数据自动截断与瘦身 (Data Retention & Pruning)
 为实现“无人值守、永久运行”的环境要求，防止数据库因常年积累导致体积失控和性能暴跌。
 
-- [ ] **灵活配置的清理策略 (Retention Policies)**
+- [x] **灵活配置的清理策略 (Retention Policies)**
   - 在前端设置中新增“数据保留策略”卡片，允许自定诸如“保留最近 30 天消息，超期物理删除”等规则。
   - 利用 `SettingsDAO`，将设置值如 `retention_days=30` 持久化入库。
-- [ ] **自动化垃圾回收执行层 (Automated Garbage Collection)**
+- [x] **自动化垃圾回收执行层 (Automated Garbage Collection)**
   - 后端接入轻量级清理任务（可挂靠至 Collector 进程并利用 asyncio 离线循环）。
   - 执行操作注重不锁库与平滑：利用 `DELETE FROM ... LIMIT X` 配合周期性的 `VACUUM` 来腾出 SQLite 的实际磁盘空间。
-- [ ] **高价值数据隔离保护 (Preserve Meta Intelligence)**
+- [x] **高价值数据隔离保护 (Preserve Meta Intelligence)**
   - 将海量且低价值的明细记录 (`messages`) 丢弃。
   - 将具有长效价值沉淀的精华内容分离，如压缩归纳好的 `summaries`、人工二次打标过的 `links` 设置不同的长期乃至永久的生命周期。
