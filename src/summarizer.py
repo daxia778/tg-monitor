@@ -49,31 +49,22 @@ class Summarizer:
 
         # 每个 key 的并发上限（可单独配置，默认 3）
         per_key_concurrency = self.ai_cfg.get("max_concurrent_per_key", 3)
-        # 为每个 key 建立独立的信号量，真正实现 N key × M 并发
-        self._key_sems: list = [
-            asyncio.Semaphore(per_key_concurrency) for _ in self._keys
-        ]
-        # 原子轮询计数器（用 asyncio.Lock 保证并发安全）
-        self._rr_index: int = 0
-        self._rr_lock = asyncio.Lock()
+        # 使用 asyncio.Queue 实现动态负载平衡池，代替原有的静态轮询等待
+        # 当有请求时只分配当前处于空闲状态的 key
+        self._key_queue = asyncio.Queue()
+        for key in self._keys:
+            for _ in range(per_key_concurrency):
+                self._key_queue.put_nowait(key)
 
-        # 全局兼容属性（部分代码仍读 self._sem，保持向后兼容）
+        # 全局兼容属性
         max_concurrent = self.ai_cfg.get("max_concurrent", per_key_concurrency * len(self._keys))
         self._sem = asyncio.Semaphore(max_concurrent)
 
         total = per_key_concurrency * len(self._keys)
         logger.info(
-            f"🤖 LLM 负载均衡: {len(self._keys)} 个 key × "
-            f"{per_key_concurrency} 并发 = 最大 {total} 并发请求"
+            f"🤖 LLM 动态负载平衡池已构建: {len(self._keys)} 个 key × "
+            f"{per_key_concurrency} = 最大 {total} 并发请求槽位"
         )
-
-    async def _next_key(self) -> tuple[str, asyncio.Semaphore]:
-        """轮询获取下一个 (api_key, semaphore) 对"""
-        async with self._rr_lock:
-            idx = self._rr_index % len(self._keys)
-            self._rr_index += 1
-        return self._keys[idx], self._key_sems[idx]
-
 
     async def summarize(
         self,
@@ -284,59 +275,60 @@ class Summarizer:
         last_error = ""
 
         for attempt in range(max_retries + 1):
-            # 每次重试都轮询到下一个 key（天然实现 429 时换 key 重试）
-            api_key, sem = await self._next_key()
+            # 从空闲槽位队列中动态获取一个 Key
+            api_key = await self._key_queue.get()
+            key_prefix = api_key[:8] if api_key else "local"
 
-            headers = {"Content-Type": "application/json"}
-            if api_key:
-                headers["Authorization"] = f"Bearer {api_key}"
+            try:
+                headers = {"Content-Type": "application/json"}
+                if api_key:
+                    headers["Authorization"] = f"Bearer {api_key}"
 
-            async with sem:  # 每个 key 独立限速
-                try:
-                    async with httpx.AsyncClient(timeout=60.0) as client:
-                        resp = await client.post(
-                            self.api_url,
-                            json=payload,
-                            headers=headers,
-                        )
-                        resp.raise_for_status()
-                        data = resp.json()
-                        reply = data["choices"][0]["message"]["content"]
-                        logger.info(
-                            f"✅ LLM 返回 {len(reply)} 字 "
-                            f"(key#{(self._rr_index - 1) % len(self._keys)})"
-                        )
-                        return reply
-
-                except httpx.HTTPStatusError as e:
-                    status = e.response.status_code
-                    last_error = e.response.text[:200]
-                    logger.error(
-                        f"❌ LLM API 错误 [{status}] (第 {attempt+1} 次, "
-                        f"key#{(self._rr_index - 1) % len(self._keys)}): {last_error}"
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    resp = await client.post(
+                        self.api_url,
+                        json=payload,
+                        headers=headers,
                     )
-                    # 4xx（非 429）不重试：参数问题，换 key 也没用
-                    if 400 <= status < 500 and status != 429:
-                        return f"❌ AI 代理返回错误: {status}"
-                    # 429 限速：直接进入下一次循环换 key 重试，不等待
-                    if status == 429:
-                        logger.info("⚠️ 触发限速(429)，自动切换到下一个 key 重试...")
-                        continue
-                    # 5xx 服务端错误快重试或返回（避免持续死锁）
-                    if status >= 500:
-                        logger.warning(f"⚠️ AI代理服务端错误: {status}")
-                        if attempt >= 1:  # 最多一次重试
-                            return f"❌ AI代理服务端错误: {status}"
-
-                except Exception as e:
-                    last_error = str(e)
-                    logger.warning(
-                        f"⚠️ LLM 调用失败 (第 {attempt+1} 次): {e}"
+                    resp.raise_for_status()
+                    data = resp.json()
+                    reply = data["choices"][0]["message"]["content"]
+                    logger.info(
+                        f"✅ LLM 返回 {len(reply)} 字 (槽位 key:{key_prefix}...)"
                     )
+                    return reply
+
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code
+                last_error = e.response.text[:200]
+                logger.error(
+                    f"❌ LLM API 错误 [{status}] (第 {attempt+1} 次, "
+                    f"槽位 key:{key_prefix}...): {last_error}"
+                )
+                if 400 <= status < 500 and status != 429:
+                    return f"❌ AI 代理返回错误: {status}"
+                if status == 429:
+                    logger.info("⚠️ 触发限速(429)，自动由下一个空闲 key 接管...")
+                    continue
+                if status >= 500:
+                    logger.warning(f"⚠️ AI代理服务端错误: {status}")
+                    if attempt >= 1:
+                        return f"❌ AI代理服务端错误: {status}"
+
+            except httpx.RequestError as e:
+                last_error = f"网络请求错误: {e}"
+                logger.warning(f"⚠️ LLM 网络连通异常 (第 {attempt+1} 次): {e}")
+            except Exception as e:
+                last_error = str(e)
+                logger.warning(f"⚠️ LLM 发生未知错误 (第 {attempt+1} 次): {e}")
+            finally:
+                # 不管成功失败，最后必须将 Key 槽位归还到队列中供其他任务使用
+                self._key_queue.put_nowait(api_key)
+                self._key_queue.task_done()
 
             if attempt < max_retries:
-                wait = 2 ** attempt  # 1s → 2s
-                logger.info(f"⏳ {wait}s 后重试...")
+                wait = 2 ** attempt
+                logger.info(f"⏳ 等待 {wait}s 后进行下一次调用...")
                 await asyncio.sleep(wait)
 
         logger.error(f"❌ LLM 调用多次失败，放弃。最后错误: {last_error}")

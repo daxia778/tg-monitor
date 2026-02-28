@@ -215,7 +215,8 @@ async def api_alerts_config(db: Database = Depends(get_db)):
 async def api_recent_messages(
     limit: int = Query(default=100, le=500),
     group_id: Optional[int] = Query(default=None),
-, db: Database = Depends(get_db)):
+    db: Database = Depends(get_db)
+):
     """最新消息流（始终返回最新的 N 条）"""
     messages = await db.get_recent_messages(limit=limit, group_id=group_id)
 
@@ -240,7 +241,8 @@ async def api_export(
     group_id: Optional[int] = Query(default=None),
     # D4 修复：加条数上限参数，防止全量导出 OOM 或超时
     max_rows: int = Query(default=10000, le=50000, description="最多导出条数"),
-, db: Database = Depends(get_db)):
+    db: Database = Depends(get_db)
+):
     """CSV 数据导出"""
     now = datetime.now(timezone.utc)
     since = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
@@ -329,7 +331,8 @@ async def api_llm_status(db: Database = Depends(get_db)):
 async def api_summary_generate(
     hours: int = Query(default=24, ge=1, le=720),
     mode: str = Query(default="quick", regex="^(quick|per_group)$"),
-, db: Database = Depends(get_db)):
+    db: Database = Depends(get_db)
+):
     """触发摘要生成（异步任务，返回 task_id 用于轮询进度）"""
     config = _config or load_config()
 
