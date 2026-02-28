@@ -813,7 +813,8 @@
             <h2 id="page-title">📊 概览</h2>
             <div class="topbar-actions">
                 <button class="btn" data-action="refresh">🔄 刷新</button>
-                <button class="btn btn-accent" id="auto-refresh-btn" data-action="toggle-auto-refresh">⏱ 自动刷新: 开</button>
+                <button class="btn btn-accent" id="auto-refresh-btn" data-action="toggle-auto-refresh">⏱ 自动刷新:
+                    开</button>
             </div>
         </div>
         <div class="content">
@@ -852,9 +853,9 @@
                         <div class="card-h">
                             <h3>📈 消息趋势</h3>
                             <div class="time-sel">
-                                <button class="t-btn" data-action="trend"  data-h="24">24h</button>
-                                <button class="t-btn on" data-action="trend"  data-h="72">3天</button>
-                                <button class="t-btn" data-action="trend"  data-h="168">7天</button>
+                                <button class="t-btn" data-action="trend" data-h="24">24h</button>
+                                <button class="t-btn on" data-action="trend" data-h="72">3天</button>
+                                <button class="t-btn" data-action="trend" data-h="168">7天</button>
                             </div>
                         </div>
                         <div class="card-b"><canvas id="trendChart" height="220"></canvas></div>
@@ -1050,10 +1051,14 @@
                                 <button class="t-btn" data-action=\"set-sum-hours\" data-h=\"1\" data-h="1">1h</button>
                                 <button class="t-btn" data-action=\"set-sum-hours\" data-h=\"3\" data-h="3">3h</button>
                                 <button class="t-btn" data-action=\"set-sum-hours\" data-h=\"6\" data-h="6">6h</button>
-                                <button class="t-btn on" data-action=\"set-sum-hours\" data-h=\"12\" data-h="12">12h</button>
-                                <button class="t-btn" data-action=\"set-sum-hours\" data-h=\"24\" data-h="24">24h</button>
-                                <button class="t-btn" data-action=\"set-sum-hours\" data-h=\"72\" data-h="72">3天</button>
-                                <button class="t-btn" data-action=\"set-sum-hours\" data-h=\"168\" data-h="168">7天</button>
+                                <button class="t-btn on" data-action=\"set-sum-hours\" data-h=\"12\"
+                                    data-h="12">12h</button>
+                                <button class="t-btn" data-action=\"set-sum-hours\" data-h=\"24\"
+                                    data-h="24">24h</button>
+                                <button class="t-btn" data-action=\"set-sum-hours\" data-h=\"72\"
+                                    data-h="72">3天</button>
+                                <button class="t-btn" data-action=\"set-sum-hours\" data-h=\"168\"
+                                    data-h="168">7天</button>
                             </div>
                         </div>
                         <div style="margin-bottom:18px">
@@ -1270,9 +1275,9 @@
                 // 趋势
                 if (gdChart) gdChart.destroy();
                 const ctx = document.getElementById('gdChart').getContext('2d');
-                const g = ctx.createLinearGradient(0, 0, 0, 180); g.addColorStop(0, 'rgba(121,192,255,.25)'); g.addColorStop(1, 'rgba(121,192,255,0)');
+                const g = ctx.createLinearGradient(0, 0, 0, 180); g.addColorStop(0, 'rgba(88,166,255,.15)'); g.addColorStop(1, 'rgba(88,166,255,0)');
                 gdChart = new Chart(ctx, {
-                    type: 'line', data: { labels: d.trends.map(t => BJ(t.hour)), datasets: [{ data: d.trends.map(t => t.count), borderColor: '#79c0ff', backgroundColor: g, fill: true, tension: .4, borderWidth: 2, pointRadius: 0 }] },
+                    type: 'line', data: { labels: d.trends.map(t => BJ(t.hour)), datasets: [{ data: d.trends.map(t => t.count), borderColor: '#58a6ff', backgroundColor: g, fill: true, tension: .4, borderWidth: 2, pointRadius: 0 }] },
                     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,.02)' }, ticks: { color: '#6e7681', font: { size: 9 }, maxTicksLimit: 10, maxRotation: 0 } }, y: { grid: { color: 'rgba(255,255,255,.02)' }, ticks: { color: '#6e7681', font: { size: 9 } }, beginAtZero: true } } }
                 });
                 // 用户
@@ -1542,6 +1547,46 @@
                 document.getElementById('footer-status').textContent = d.status === 'ok' ? '正常运行' : '异常';
             } catch { document.getElementById('footer-status').textContent = '连接失败' }
         }
+
+        // ─── 全局事件代理 ───
+        document.addEventListener('click', function (e) {
+            const el = e.target.closest('[data-action]');
+            if (!el) return;
+
+            // Toggle dropdowns/groups that were previously inline onclicks inside generated HTML
+            if (el.dataset.action === 'toggle-hist') {
+                const trg = document.getElementById(el.dataset.target);
+                if (trg) trg.style.display = trg.style.display === 'none' ? '' : 'none';
+                return;
+            }
+            if (el.dataset.action === 'open-group') { openGroupDetail(parseInt(el.dataset.gid)); return; }
+            if (el.dataset.action === 'tag-search') {
+                document.getElementById('searchInput').value = el.dataset.tag; showPage('search'); doSearch(); return;
+            }
+            if (el.dataset.action === 'page') { showPage(el.dataset.page); return; }
+
+            // Standard static buttons
+            const act = el.dataset.action;
+            if (act === 'refresh') refreshAll();
+            else if (act === 'toggle-auto-refresh') toggleAutoRefresh();
+            else if (act === 'export') exportCSV();
+            else if (act === 'load-messages') loadMessages();
+            else if (act === 'search') searchMessages();
+            else if (act === 'do-search') doSearch();
+            else if (act === 'load-links') loadLinks();
+            else if (act === 'load-alerts') loadAlerts();
+            else if (act === 'load-summaries') loadSummaries();
+            else if (act === 'open-ai-config') openAIConfig();
+            else if (act === 'save-ai-config') saveAIConfig();
+            else if (act === 'close-modal') closeModal(el.dataset.modal);
+            else if (act === 'close-group') closeGroupDetail();
+            else if (act === 'trend') loadTrends(parseInt(el.dataset.h));
+            else if (act === 'toggle-group') toggleMsgGroup(el);
+            else if (act === 'jump-msg') jumpToMsg(parseInt(el.dataset.msgId));
+            else if (act === 'set-sum-hours') setSumHours(parseInt(el.dataset.h));
+            else if (act === 'gen-summary') generateSummary();
+            else if (act === 'load-sum-hist') loadSummaryHistory();
+        });
 
         // ─── 初始化 ───
         showPage('overview');
